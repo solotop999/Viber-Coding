@@ -1,195 +1,149 @@
-"""
-Ribbon toolbar — horizontal strip at the top, giống Paint.
-Groups: Tools | Stroke | Colors | Effects | Actions
-"""
+"""Ribbon toolbar for capture actions and annotation tools."""
 from __future__ import annotations
 
-from pathlib import Path
-
-from PyQt6.QtCore import Qt, QSize, QEvent, QPoint, QRect
-from PyQt6.QtGui import QColor, QIcon, QPainter, QPixmap, QFont, QBrush, QPen
+from PyQt6.QtCore import QEvent, QPoint, QRect, QSize, Qt
+from PyQt6.QtGui import QBrush, QColor, QFont, QIcon, QPainter, QPen, QPixmap
 from PyQt6.QtWidgets import (
-    QApplication, QWidget, QHBoxLayout, QVBoxLayout, QToolButton, QButtonGroup,
-    QColorDialog, QComboBox, QLabel, QFrame, QFileDialog, QMessageBox,
+    QApplication,
+    QButtonGroup,
+    QComboBox,
+    QColorDialog,
+    QFrame,
+    QGridLayout,
+    QHBoxLayout,
+    QToolButton,
+    QVBoxLayout,
+    QWidget,
 )
 
+from core.settings import save_presentation_background_color
 from editor.canvas import (
     AnnotationCanvas,
-    TOOL_ARROW, TOOL_LABEL,
-    TOOL_RECT, TOOL_REDACT, TOOL_TEXT,
+    TOOL_ARROW,
+    TOOL_LABEL,
+    TOOL_RECT,
+    TOOL_REDACT,
+    TOOL_TEXT,
 )
-from core.clipboard import copy_to_clipboard
 
-# Màu sắc nhanh hiển thị trong ribbon (giống Paint)
-_QUICK_COLORS = [
-    "#000000", "#FFFFFF", "#7F7F7F", "#C3C3C3",
-    "#FF0000", "#FF6600", "#FFFF00", "#00FF00",
-    "#00FFFF", "#0000FF", "#FF00FF", "#FF80C0",
-    "#FF4444", "#804000", "#008000", "#004080",
+_PALETTE_COLORS = [
+    "#19C85B",
+    "#FF3B30",
+    "#000000",
+    "#FFFFFF",
 ]
 
-_RIBBON_H   = 72   # chiều cao ribbon
-_BTN_W      = 52   # tool button width
-_BTN_H      = 56   # tool button height (icon + label)
-_COLOR_SZ   = 18   # color swatch size
-
-
-def _color_swatch(color: QColor, size: int = _COLOR_SZ, selected: bool = False) -> QPixmap:
-    px = QPixmap(size, size)
-    px.fill(color)
-    p = QPainter(px)
-    border = QColor("#0078D4") if selected else QColor(0, 0, 0, 60)
-    p.setPen(QPen(border, 2 if selected else 1))
-    p.drawRect(0, 0, size - 1, size - 1)
-    p.end()
-    return px
+_RIBBON_H = 72
+_BTN_W = 52
+_BTN_H = 56
+_CHIP_SZ = 16
+_CHIP_ICON_SZ = 20
 
 
 def _make_tool_icon(symbol: str, size: int = 28) -> QIcon:
-    """Draw proper tool icons using QPainter instead of unicode."""
-    px = QPixmap(size, size)
-    px.fill(Qt.GlobalColor.transparent)
-    p = QPainter(px)
-    p.setRenderHint(QPainter.RenderHint.Antialiasing)
-    c = QColor("#222222")
-    pen = QPen(c, 2)
+    pixmap = QPixmap(size, size)
+    pixmap.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+    color = QColor("#222222")
+    pen = QPen(color, 2)
     pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
     pen.setCapStyle(Qt.PenCapStyle.RoundCap)
-    p.setPen(pen)
-    p.setBrush(QBrush(Qt.BrushStyle.NoBrush))
-    m = 4  # margin
+    painter.setPen(pen)
+    painter.setBrush(QBrush(Qt.BrushStyle.NoBrush))
+    margin = 4
 
     if symbol == "rect":
-        p.drawRoundedRect(m, m + 2, size - m*2, size - m*2 - 4, 2, 2)
-
-    elif symbol == "circle":
-        p.drawEllipse(m, m + 2, size - m*2, size - m*2 - 4)
-
+        painter.drawRoundedRect(margin, margin + 2, size - margin * 2, size - margin * 2 - 4, 2, 2)
     elif symbol == "arrow":
         import math
-        x1, y1 = m + 2, size - m - 2
-        x2, y2 = size - m - 2, m + 2
-        p.drawLine(x1, y1, x2, y2)
-        angle = math.atan2(y1 - y2, x1 - x2)
-        hl = 8
-        ha = math.radians(25)
-        p.setBrush(QBrush(c))
-        from PyQt6.QtGui import QPolygonF
         from PyQt6.QtCore import QPointF
-        poly = QPolygonF([
+        from PyQt6.QtGui import QPolygonF
+
+        x1, y1 = margin + 2, size - margin - 2
+        x2, y2 = size - margin - 2, margin + 2
+        painter.drawLine(x1, y1, x2, y2)
+        angle = math.atan2(y1 - y2, x1 - x2)
+        head_len = 8
+        head_angle = math.radians(25)
+        painter.setBrush(QBrush(color))
+        painter.drawPolygon(QPolygonF([
             QPointF(x2, y2),
-            QPointF(x2 + hl * math.cos(angle - ha), y2 + hl * math.sin(angle - ha)),
-            QPointF(x2 + hl * math.cos(angle + ha), y2 + hl * math.sin(angle + ha)),
-        ])
-        p.drawPolygon(poly)
-
+            QPointF(x2 + head_len * math.cos(angle - head_angle), y2 + head_len * math.sin(angle - head_angle)),
+            QPointF(x2 + head_len * math.cos(angle + head_angle), y2 + head_len * math.sin(angle + head_angle)),
+        ]))
     elif symbol == "label":
-        p.setBrush(QBrush(c))
-        cx, cy, r = size // 2, size // 2, size // 2 - m
-        p.drawEllipse(cx - r, cy - r, r * 2, r * 2)
-        p.setPen(QPen(QColor("white"), 1))
-        p.setFont(QFont("Arial", 9, QFont.Weight.Bold))
-        p.drawText(px.rect(), Qt.AlignmentFlag.AlignCenter, "1")
-
+        painter.setBrush(QBrush(color))
+        cx, cy, radius = size // 2, size // 2, size // 2 - margin
+        painter.drawEllipse(cx - radius, cy - radius, radius * 2, radius * 2)
+        painter.setPen(QPen(QColor("white"), 1))
+        painter.setFont(QFont("Arial", 9, QFont.Weight.Bold))
+        painter.drawText(pixmap.rect(), Qt.AlignmentFlag.AlignCenter, "1")
     elif symbol == "text":
-        p.setFont(QFont("Arial", 16, QFont.Weight.Bold))
-        p.setPen(QPen(c))
-        p.drawText(px.rect(), Qt.AlignmentFlag.AlignCenter, "A")
-
+        painter.setFont(QFont("Arial", 16, QFont.Weight.Bold))
+        painter.setPen(QPen(color))
+        painter.drawText(pixmap.rect(), Qt.AlignmentFlag.AlignCenter, "A")
     elif symbol == "redact":
-        # Mosaic / blur icon
-        sq = (size - m * 2) // 3
+        square = (size - margin * 2) // 3
         for row in range(3):
             for col in range(3):
                 shade = 80 + (row * 3 + col) * 18
-                p.setBrush(QBrush(QColor(shade, shade, shade)))
-                p.setPen(QPen(QColor("white"), 1))
-                p.drawRect(m + col * sq, m + row * sq, sq - 1, sq - 1)
-
+                painter.setBrush(QBrush(QColor(shade, shade, shade)))
+                painter.setPen(QPen(QColor("white"), 1))
+                painter.drawRect(margin + col * square, margin + row * square, square - 1, square - 1)
     elif symbol == "new":
-        pen2 = QPen(c, 2.5)
+        pen2 = QPen(color, 2.5)
         pen2.setCapStyle(Qt.PenCapStyle.RoundCap)
-        p.setPen(pen2)
+        painter.setPen(pen2)
         cx, cy = size // 2, size // 2
-        hl = size // 2 - m
-        p.drawLine(cx, cy - hl, cx, cy + hl)
-        p.drawLine(cx - hl, cy, cx + hl, cy)
-
+        half_len = size // 2 - margin
+        painter.drawLine(cx, cy - half_len, cx, cy + half_len)
+        painter.drawLine(cx - half_len, cy, cx + half_len, cy)
     elif symbol == "undo":
-        from PyQt6.QtCore import QRectF
-        import math
-        # Arc arrow
-        pen2 = QPen(c, 2)
-        pen2.setCapStyle(Qt.PenCapStyle.RoundCap)
-        p.setPen(pen2)
-        r = size // 2 - m - 1
-        cx, cy = size // 2, size // 2 + 2
-        p.drawArc(int(cx - r), int(cy - r), r * 2, r * 2, 30 * 16, 240 * 16)
-        # Arrowhead tip
-        ax = int(cx - r * math.cos(math.radians(30)))
-        ay = int(cy - r * math.sin(math.radians(30)))
-        p.setBrush(QBrush(c))
-        from PyQt6.QtGui import QPolygonF
-        from PyQt6.QtCore import QPointF
-        p.drawPolygon(QPolygonF([
-            QPointF(ax, ay),
-            QPointF(ax - 6, ay - 2),
-            QPointF(ax - 2, ay + 5),
-        ]))
-
+        font = QFont("Segoe UI Symbol", 19)
+        painter.setFont(font)
+        painter.setPen(QPen(color))
+        painter.drawText(pixmap.rect().adjusted(0, -1, 0, 0), Qt.AlignmentFlag.AlignCenter, "↶")
     elif symbol == "clear":
-        # Trash bin
-        bx, by, bw, bh = m + 4, m + 5, size - (m+4)*2, size - m*2 - 6
-        p.drawRect(bx, by, bw, bh)
-        p.drawLine(m + 2, by, size - m - 2, by)
-        p.drawLine(size//2, m + 1, size//2, by)
-        for i in range(1, 3):
-            x = bx + (bw * i) // 3
-            p.drawLine(x, by + 3, x, by + bh - 3)
-
+        bx, by = margin + 4, margin + 5
+        bw = size - (margin + 4) * 2
+        bh = size - margin * 2 - 6
+        painter.drawRect(bx, by, bw, bh)
+        painter.drawLine(margin + 2, by, size - margin - 2, by)
+        painter.drawLine(size // 2, margin + 1, size // 2, by)
+        for index in range(1, 3):
+            x = bx + (bw * index) // 3
+            painter.drawLine(x, by + 3, x, by + bh - 3)
     elif symbol == "copy":
-        # Two overlapping squares
-        p.drawRect(m + 4, m, size - m*2 - 4, size - m*2 - 4)
-        p.setBrush(QBrush(QColor("#F3F3F3")))
-        p.drawRect(m, m + 4, size - m*2 - 4, size - m*2 - 4)
-
+        painter.drawRect(margin + 4, margin, size - margin * 2 - 4, size - margin * 2 - 4)
+        painter.setBrush(QBrush(QColor("#F3F3F3")))
+        painter.drawRect(margin, margin + 4, size - margin * 2 - 4, size - margin * 2 - 4)
     elif symbol == "save":
-        # Floppy disk
-        p.setBrush(QBrush(QColor("#D0D8F0")))
-        p.drawRect(m, m, size - m*2, size - m*2)
-        p.setBrush(QBrush(QColor("#8090C0")))
-        p.drawRect(m + 3, m, size - m*2 - 6, 8)
-        p.setBrush(QBrush(QColor("white")))
-        p.drawRect(m + 3, m + 14, size - m*2 - 6, size - m*2 - 14)
-
+        painter.setBrush(QBrush(QColor("#D0D8F0")))
+        painter.drawRect(margin, margin, size - margin * 2, size - margin * 2)
+        painter.setBrush(QBrush(QColor("#8090C0")))
+        painter.drawRect(margin + 3, margin, size - margin * 2 - 6, 8)
+        painter.setBrush(QBrush(QColor("white")))
+        painter.drawRect(margin + 3, margin + 14, size - margin * 2 - 6, size - margin * 2 - 14)
     else:
-        # Fallback text
-        p.setFont(QFont("Segoe UI", 11))
-        p.setPen(QPen(c))
-        p.drawText(px.rect(), Qt.AlignmentFlag.AlignCenter, symbol)
+        painter.setFont(QFont("Segoe UI", 11))
+        painter.setPen(QPen(color))
+        painter.drawText(pixmap.rect(), Qt.AlignmentFlag.AlignCenter, symbol)
 
-    p.end()
-    return QIcon(px)
+    painter.end()
+    return QIcon(pixmap)
 
 
 def _vsep() -> QFrame:
-    sep = QFrame()
-    sep.setFrameShape(QFrame.Shape.VLine)
-    sep.setStyleSheet("color: #CCCCCC;")
-    sep.setFixedWidth(1)
-    return sep
-
-
-def _group_label(text: str) -> QLabel:
-    lbl = QLabel(text)
-    lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-    lbl.setStyleSheet("color: #555555; font-size: 9px; font-family: Segoe UI;")
-    lbl.setFixedHeight(13)
-    return lbl
+    separator = QFrame()
+    separator.setFrameShape(QFrame.Shape.VLine)
+    separator.setStyleSheet("color: #CCCCCC;")
+    separator.setFixedWidth(1)
+    return separator
 
 
 class _ToolBtn(QToolButton):
-    """Tool button: icon on top, label below — kiểu Paint."""
     def __init__(self, symbol: str, label: str, tooltip: str) -> None:
         super().__init__()
         self.setCheckable(True)
@@ -206,7 +160,7 @@ class _ToolBtn(QToolButton):
                 border-radius: 3px;
                 background: transparent;
                 color: #1A1A1A;
-                padding: 2px 0px 2px 0px;
+                padding: 2px 0 2px 0;
             }
             QToolButton:hover {
                 background: #E5F3FF;
@@ -223,7 +177,6 @@ class _ToolBtn(QToolButton):
 
 
 class _ActionBtn(QToolButton):
-    """Action button (no checkable): icon + label."""
     def __init__(self, symbol: str, label: str, tooltip: str) -> None:
         super().__init__()
         self.setFixedSize(_BTN_W, _BTN_H)
@@ -239,7 +192,7 @@ class _ActionBtn(QToolButton):
                 border-radius: 3px;
                 background: transparent;
                 color: #1A1A1A;
-                padding: 2px 0px 2px 0px;
+                padding: 2px 0 2px 0;
             }
             QToolButton:hover {
                 background: #E5F3FF;
@@ -251,13 +204,65 @@ class _ActionBtn(QToolButton):
         """)
 
 
+class _ColorChip(QToolButton):
+    def __init__(self, color: QColor) -> None:
+        super().__init__()
+        self._color = color
+        self.setCheckable(True)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setFixedSize(_CHIP_ICON_SZ, _CHIP_ICON_SZ)
+        self.setIconSize(QSize(_CHIP_ICON_SZ, _CHIP_ICON_SZ))
+        self.setStyleSheet("""
+            QToolButton {
+                border: none;
+                background: transparent;
+                padding: 0;
+            }
+        """)
+        self._apply_icon(False)
+        self.toggled.connect(self._apply_icon)
+
+    def _apply_icon(self, checked: bool) -> None:
+        pixmap = QPixmap(_CHIP_ICON_SZ, _CHIP_ICON_SZ)
+        pixmap.fill(Qt.GlobalColor.transparent)
+
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        outer_rect = QRect(1, 1, _CHIP_ICON_SZ - 2, _CHIP_ICON_SZ - 2)
+        if checked:
+            painter.setBrush(QBrush(QColor("#2AA7FF")))
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.drawEllipse(outer_rect)
+
+            white_rect = outer_rect.adjusted(3, 3, -3, -3)
+            painter.setBrush(QBrush(QColor("white")))
+            painter.drawEllipse(white_rect)
+
+            color_rect = white_rect.adjusted(2, 2, -2, -2)
+        else:
+            painter.setBrush(QBrush(self._color))
+            painter.setPen(QPen(QColor(0, 0, 0, 45), 1))
+            painter.drawEllipse(outer_rect)
+            color_rect = QRect()
+
+        if checked:
+            painter.setBrush(QBrush(self._color))
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.drawEllipse(color_rect)
+
+        painter.end()
+        self.setIcon(QIcon(pixmap))
+
+
 class _TextFormatPopup(QWidget):
-    """Floating popup with font size + bold toggle, shown below the Text button."""
     def __init__(self, canvas: AnnotationCanvas, parent: QWidget) -> None:
-        super().__init__(parent,
-                         Qt.WindowType.Tool
-                         | Qt.WindowType.FramelessWindowHint
-                         | Qt.WindowType.WindowStaysOnTopHint)
+        super().__init__(
+            parent,
+            Qt.WindowType.Tool
+            | Qt.WindowType.FramelessWindowHint
+            | Qt.WindowType.WindowStaysOnTopHint,
+        )
         self._canvas = canvas
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
         self.setFixedSize(168, 58)
@@ -276,16 +281,15 @@ class _TextFormatPopup(QWidget):
         layout.setContentsMargins(10, 8, 10, 8)
         layout.setSpacing(8)
 
-        # Font size dropdown
         self._size_combo = QComboBox()
-        for s in [8, 10, 12, 14, 16, 18, 20, 24, 28, 32, 36, 48, 64, 72]:
-            self._size_combo.addItem(str(s), s)
-        self._size_combo.setCurrentIndex(3)  # 14
+        for size in [8, 10, 12, 14, 16, 18, 20, 24, 28, 32, 36, 48, 64, 72]:
+            self._size_combo.addItem(str(size), size)
+        self._size_combo.setCurrentIndex(3)
         self._size_combo.setFixedHeight(38)
         self._size_combo.setFont(QFont("Segoe UI", 13))
         self._size_combo.activated.connect(self._update)
 
-        _btn_style = """
+        btn_style = """
             QToolButton {
                 border: 1px solid #AAAAAA;
                 border-radius: 4px;
@@ -299,15 +303,14 @@ class _TextFormatPopup(QWidget):
             QToolButton:hover { background: #E5F3FF; }
         """
 
-        # Bold button
         self._bold_btn = QToolButton()
         self._bold_btn.setText("B")
         self._bold_btn.setCheckable(True)
         self._bold_btn.setFixedSize(38, 38)
-        bf = QFont("Segoe UI", 13)
-        bf.setBold(True)
-        self._bold_btn.setFont(bf)
-        self._bold_btn.setStyleSheet(_btn_style)
+        bold_font = QFont("Segoe UI", 13)
+        bold_font.setBold(True)
+        self._bold_btn.setFont(bold_font)
+        self._bold_btn.setStyleSheet(btn_style)
         self._bold_btn.clicked.connect(self._update)
 
         layout.addWidget(self._size_combo)
@@ -322,17 +325,15 @@ class _TextFormatPopup(QWidget):
         QApplication.instance().removeEventFilter(self)
 
     def eventFilter(self, obj, event) -> bool:
-        t = event.type()
-        if t == QEvent.Type.MouseButtonPress:
-            # If the combo's dropdown list is open, let the combo handle the
-            # click so it can confirm the selection and emit activated().
+        event_type = event.type()
+        if event_type == QEvent.Type.MouseButtonPress:
             if self._size_combo.view().isVisible():
                 return False
             global_pos = event.globalPosition().toPoint()
             popup_rect = QRect(self.mapToGlobal(QPoint(0, 0)), self.size())
             if not popup_rect.contains(global_pos):
                 self.hide()
-        elif t == QEvent.Type.ApplicationDeactivated:
+        elif event_type == QEvent.Type.ApplicationDeactivated:
             self.hide()
         return False
 
@@ -348,11 +349,12 @@ class _TextFormatPopup(QWidget):
 
 
 class Toolbar(QWidget):
-    def __init__(self, canvas: AnnotationCanvas, editor) -> None:
+    def __init__(self, canvas: AnnotationCanvas, editor, presentation_color: tuple[int, int, int]) -> None:
         super().__init__()
         self._canvas = canvas
         self._editor = editor
-        self._color = QColor("#FF4444")
+        self._color = QColor("#19C85B")
+        self._background_color = QColor(*presentation_color)
 
         self.setFixedHeight(_RIBBON_H)
         self.setStyleSheet("QWidget { background: #F3F3F3; }")
@@ -361,38 +363,38 @@ class Toolbar(QWidget):
         main.setContentsMargins(8, 4, 8, 0)
         main.setSpacing(0)
 
-        # ── GROUP: Recapture ──────────────────────────────────────────
         main.addLayout(self._recapture_group())
         main.addWidget(_vsep())
         main.addSpacing(4)
 
-        # ── GROUP: Tools ──────────────────────────────────────────────
         main.addLayout(self._tools_group())
         main.addWidget(_vsep())
         main.addSpacing(4)
 
-        # ── GROUP: Colors ─────────────────────────────────────────────
         main.addLayout(self._colors_group())
         main.addWidget(_vsep())
         main.addSpacing(4)
 
-        # ── GROUP: Actions ────────────────────────────────────────────
+        main.addLayout(self._presentation_group())
+        main.addWidget(_vsep())
+        main.addSpacing(4)
+
         main.addLayout(self._actions_group())
-
         main.addStretch()
-
-    # ──────────────────────────────────────── group builders
 
     def _recapture_group(self) -> QVBoxLayout:
         vbox = QVBoxLayout()
         vbox.setContentsMargins(0, 0, 0, 0)
         vbox.setSpacing(0)
+
         row = QHBoxLayout()
         row.setSpacing(1)
         row.setContentsMargins(0, 0, 0, 0)
-        btn = _ActionBtn("new", "New", "New screenshot  Ctrl+N")
-        btn.clicked.connect(self._editor.recapture_requested.emit)
-        row.addWidget(btn)
+
+        button = _ActionBtn("new", "New", "New screenshot  Ctrl+N")
+        button.clicked.connect(self._editor.request_recapture)
+        row.addWidget(button)
+
         vbox.addLayout(row)
         return vbox
 
@@ -410,25 +412,23 @@ class Toolbar(QWidget):
         self._tool_btns: dict[str, _ToolBtn] = {}
 
         tools = [
-            (TOOL_RECT,   "rect",   "Rect",   "Rectangle"),
-            (TOOL_ARROW,  "arrow",  "Arrow",  "Arrow"),
-            (TOOL_LABEL,  "label",  "Label",  "Numbered Label"),
-            (TOOL_TEXT,   "text",   "Text",   "Add Text"),
+            (TOOL_RECT, "rect", "Rect", "Rectangle"),
+            (TOOL_ARROW, "arrow", "Arrow", "Arrow"),
+            (TOOL_LABEL, "label", "Label", "Numbered Label"),
+            (TOOL_TEXT, "text", "Text", "Add Text"),
             (TOOL_REDACT, "redact", "Redact", "Blur / Redact"),
         ]
-        for tool_name, sym, lbl, tip in tools:
-            btn = _ToolBtn(sym, lbl, tip)
+        for tool_name, symbol, label, tooltip in tools:
+            button = _ToolBtn(symbol, label, tooltip)
             if tool_name == TOOL_TEXT:
-                btn.clicked.connect(self._on_text_btn_clicked)
+                button.clicked.connect(self._on_text_btn_clicked)
             else:
-                btn.clicked.connect(lambda _, n=tool_name: self._on_tool_clicked(n))
-            self._btn_group.addButton(btn)
-            self._tool_btns[tool_name] = btn
-            row.addWidget(btn)
+                button.clicked.connect(lambda _, name=tool_name: self._on_tool_clicked(name))
+            self._btn_group.addButton(button)
+            self._tool_btns[tool_name] = button
+            row.addWidget(button)
 
         self._tool_btns[TOOL_RECT].setChecked(True)
-
-        # Text format popup (hidden by default)
         self._text_popup = _TextFormatPopup(self._canvas, self.window())
 
         vbox.addLayout(row)
@@ -440,8 +440,8 @@ class Toolbar(QWidget):
 
     def _on_text_btn_clicked(self) -> None:
         self._canvas.set_tool(TOOL_TEXT)
-        btn = self._tool_btns[TOOL_TEXT]
-        pos = btn.mapToGlobal(btn.rect().bottomLeft())
+        button = self._tool_btns[TOOL_TEXT]
+        pos = button.mapToGlobal(button.rect().bottomLeft())
         self._text_popup.move(pos)
         self._text_popup.show()
         self._text_popup.raise_()
@@ -449,51 +449,30 @@ class Toolbar(QWidget):
     def _colors_group(self) -> QVBoxLayout:
         vbox = QVBoxLayout()
         vbox.setContentsMargins(6, 0, 6, 0)
-        vbox.setSpacing(2)
+        vbox.setSpacing(0)
 
-        # Current color swatch (big) + "More colors" button
-        top_row = QHBoxLayout()
-        top_row.setSpacing(4)
+        panel = QWidget()
+        panel.setFixedSize(_BTN_W, _BTN_H)
 
-        # Big active color swatch
-        self._active_swatch = QLabel()
-        self._active_swatch.setFixedSize(32, 32)
-        self._active_swatch.setPixmap(_color_swatch(self._color, 32, True))
-        self._active_swatch.setToolTip("Current color — click to change")
-        self._active_swatch.mousePressEvent = lambda _: self._pick_color()
-        self._active_swatch.setCursor(Qt.CursorShape.PointingHandCursor)
-        top_row.addWidget(self._active_swatch)
+        grid = QGridLayout(panel)
+        grid.setContentsMargins(8, 8, 8, 8)
+        grid.setHorizontalSpacing(8)
+        grid.setVerticalSpacing(8)
 
-        # Quick color grid (2 rows × 8 cols)
-        grid_widget = QWidget()
-        grid_widget.setStyleSheet("background: transparent; border: none;")
-        grid_layout = QVBoxLayout(grid_widget)
-        grid_layout.setContentsMargins(0, 0, 0, 0)
-        grid_layout.setSpacing(2)
+        self._color_group = QButtonGroup(self)
+        self._color_group.setExclusive(True)
 
-        colors = _QUICK_COLORS
-        for row_idx in range(2):
-            row = QHBoxLayout()
-            row.setSpacing(2)
-            for col_idx in range(8):
-                i = row_idx * 8 + col_idx
-                if i >= len(colors):
-                    break
-                c = QColor(colors[i])
-                swatch = QLabel()
-                swatch.setFixedSize(_COLOR_SZ, _COLOR_SZ)
-                swatch.setPixmap(_color_swatch(c, _COLOR_SZ))
-                swatch.setToolTip(colors[i])
-                swatch.setCursor(Qt.CursorShape.PointingHandCursor)
-                swatch.mousePressEvent = (
-                    lambda _, color=c: self._set_color(color)
-                )
-                row.addWidget(swatch)
-            grid_layout.addLayout(row)
+        for index, value in enumerate(_PALETTE_COLORS):
+            color = QColor(value)
+            chip = _ColorChip(color)
+            chip.setToolTip(value)
+            chip.clicked.connect(lambda _, picked=color: self._set_color(picked))
+            self._color_group.addButton(chip)
+            grid.addWidget(chip, index // 2, index % 2, Qt.AlignmentFlag.AlignCenter)
+            if color.name().lower() == self._color.name().lower():
+                chip.setChecked(True)
 
-        top_row.addWidget(grid_widget)
-        vbox.addSpacing(4)
-        vbox.addLayout(top_row)
+        vbox.addWidget(panel)
         return vbox
 
     def _actions_group(self) -> QVBoxLayout:
@@ -505,52 +484,194 @@ class Toolbar(QWidget):
         row.setSpacing(1)
         row.setContentsMargins(0, 0, 0, 0)
 
-        undo_btn = _ActionBtn("undo",  "Undo",  "Undo  Ctrl+Z")
-        undo_btn.clicked.connect(self._canvas.undo)
+        undo_btn = _ActionBtn("undo", "Undo", "Undo  Ctrl+Z")
+        undo_btn.clicked.connect(self._editor.undo_annotations)
 
         clear_btn = _ActionBtn("clear", "Clear", "Clear all annotations")
-        clear_btn.clicked.connect(self._canvas.clear)
+        clear_btn.clicked.connect(self._editor.clear_annotations)
 
-        copy_btn = _ActionBtn("copy",  "Copy",  "Copy to clipboard  Ctrl+C")
-        copy_btn.clicked.connect(self._copy)
+        copy_btn = _ActionBtn("copy", "Copy", "Copy to clipboard  Ctrl+C")
+        copy_btn.clicked.connect(self._editor.copy_image)
 
-        save_btn = _ActionBtn("save",  "Save",  "Save to file  Ctrl+S")
-        save_btn.clicked.connect(self._save)
+        save_btn = _ActionBtn("save", "Save", "Save to file  Ctrl+S")
+        save_btn.clicked.connect(self._editor.save_image)
 
-        for btn in (undo_btn, clear_btn, copy_btn, save_btn):
-            row.addWidget(btn)
+        for button in (undo_btn, clear_btn, copy_btn, save_btn):
+            row.addWidget(button)
 
         vbox.addLayout(row)
         return vbox
 
-    # ──────────────────────────────────────── color helpers
+    def _presentation_group(self) -> QVBoxLayout:
+        vbox = QVBoxLayout()
+        vbox.setContentsMargins(8, 6, 8, 6)
+        vbox.setSpacing(4)
 
-    def _pick_color(self) -> None:
-        color = QColorDialog.getColor(self._color, self, "Choose color")
-        if color.isValid():
-            self._set_color(color)
+        top_row = QHBoxLayout()
+        top_row.setContentsMargins(0, 0, 0, 0)
+        top_row.setSpacing(0)
+
+        self._bg_btn = QToolButton()
+        self._bg_btn.setText("Background")
+        self._bg_btn.setCheckable(True)
+        self._bg_btn.setChecked(True)
+        self._bg_btn.setFixedWidth(122)
+        self._bg_btn.setFixedHeight(24)
+        self._bg_btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
+        self._bg_btn.setToolTip("Toggle social background")
+        self._bg_btn.clicked.connect(self._on_bg_toggled)
+        self._bg_btn.setStyleSheet("""
+            QToolButton {
+                border: 1px solid #9CB9D8;
+                border-radius: 5px;
+                background: #FFFFFF;
+                color: #1A1A1A;
+                font: 700 9pt "Segoe UI";
+                padding: 0 10px;
+                text-align: left;
+            }
+            QToolButton:hover {
+                background: #E8F3FF;
+                border-color: #7FAFDD;
+            }
+            QToolButton:checked {
+                background: #CCE8FF;
+                border-color: #0078D4;
+            }
+        """)
+
+        self._layout_combo = self._make_presentation_combo(58)
+        self._layout_combo.addItem("Original", "fit")
+        self._layout_combo.addItem("Portrait", "post")
+        self._layout_combo.addItem("Landscape", "wide")
+        self._layout_combo.addItem("Phone", "phone")
+        self._layout_combo.setPlaceholderText("Style")
+        self._layout_combo.setCurrentIndex(-1)
+        self._layout_combo.view().setMinimumWidth(120)
+        self._layout_combo.setStyleSheet("""
+            QComboBox {
+                background: #FFFFFF;
+                border: 1px solid #B9C7D6;
+                border-radius: 5px;
+                padding: 2px 6px 2px 6px;
+                color: #1A1A1A;
+            }
+            QComboBox:hover {
+                border-color: #7FAFDD;
+                background: #F8FBFF;
+            }
+            QComboBox::drop-down {
+                border: none;
+                width: 0px;
+            }
+            QComboBox::down-arrow {
+                image: none;
+                width: 0px;
+                height: 0px;
+            }
+        """)
+        self._layout_combo.currentIndexChanged.connect(self._on_layout_changed)
+
+        self._bg_color_btn = QToolButton()
+        self._bg_color_btn.setText("Color")
+        self._bg_color_btn.setFixedWidth(58)
+        self._bg_color_btn.setFixedHeight(24)
+        self._bg_color_btn.setToolTip("Chon mau background")
+        self._bg_color_btn.clicked.connect(self._pick_background_color)
+        self._bg_color_btn.setStyleSheet("""
+            QToolButton {
+                background: #FFFFFF;
+                border: 1px solid #B9C7D6;
+                border-radius: 5px;
+                color: #1A1A1A;
+                padding: 0 10px;
+            }
+            QToolButton:hover {
+                border-color: #7FAFDD;
+                background: #F8FBFF;
+            }
+            QToolButton:pressed {
+                background: #E8F3FF;
+            }
+        """)
+        self._sync_background_button()
+
+        top_row.addWidget(self._bg_btn)
+
+        bottom_row = QHBoxLayout()
+        bottom_row.setContentsMargins(0, 0, 0, 0)
+        bottom_row.setSpacing(6)
+        bottom_row.addWidget(self._layout_combo)
+        bottom_row.addWidget(self._bg_color_btn)
+
+        vbox.addLayout(top_row)
+        vbox.addLayout(bottom_row)
+        return vbox
+
+    def _make_presentation_combo(self, width: int) -> QComboBox:
+        combo = QComboBox()
+        combo.setFixedSize(width, 24)
+        combo.setFont(QFont("Segoe UI", 8))
+        combo.setStyleSheet("""
+            QComboBox {
+                background: #FFFFFF;
+                border: 1px solid #B9C7D6;
+                border-radius: 5px;
+                padding: 2px 20px 2px 7px;
+                color: #1A1A1A;
+            }
+            QComboBox:hover {
+                border-color: #7FAFDD;
+                background: #F8FBFF;
+            }
+            QComboBox::drop-down {
+                border: none;
+                width: 18px;
+            }
+        """)
+        return combo
 
     def _set_color(self, color: QColor) -> None:
         self._color = color
-        self._active_swatch.setPixmap(_color_swatch(color, 32, True))
         self._canvas.set_color(color)
 
-    # ──────────────────────────────────────── file actions
+    def _on_bg_toggled(self, checked: bool) -> None:
+        self._layout_combo.setEnabled(checked)
+        self._bg_color_btn.setEnabled(checked)
+        self._editor.set_presentation_enabled(checked)
 
-    def _copy(self) -> None:
-        try:
-            copy_to_clipboard(self._canvas.flatten_to_pil())
-        except Exception as e:
-            QMessageBox.warning(self, "Copy failed", str(e))
+    def _on_layout_changed(self, _index: int) -> None:
+        self._editor.set_presentation_layout(str(self._layout_combo.currentData()))
 
-    def _save(self) -> None:
-        path, _ = QFileDialog.getSaveFileName(
-            self, "Save Screenshot",
-            str(Path.home() / "Pictures"),
-            "PNG Image (*.png);;JPEG Image (*.jpg *.jpeg)",
+    def _pick_background_color(self) -> bool:
+        color = QColorDialog.getColor(
+            self._background_color,
+            self,
+            "Chon mau background",
         )
-        if path:
-            try:
-                self._canvas.flatten_to_pil().save(path)
-            except Exception as e:
-                QMessageBox.warning(self, "Save failed", str(e))
+        if not color.isValid():
+            return False
+
+        self._background_color = color
+        self._editor.set_presentation_overlay_color((color.red(), color.green(), color.blue()))
+        save_presentation_background_color((color.red(), color.green(), color.blue()))
+        self._sync_background_button()
+        return True
+
+    def _sync_background_button(self) -> None:
+        text_color = "#FFFFFF" if self._background_color.lightness() < 140 else "#1A1A1A"
+        self._bg_color_btn.setStyleSheet(f"""
+            QToolButton {{
+                background: {self._background_color.name()};
+                border: 1px solid #7A8EA6;
+                border-radius: 5px;
+                color: {text_color};
+                padding: 0 10px;
+            }}
+            QToolButton:hover {{
+                border-color: #4D6F95;
+            }}
+            QToolButton:pressed {{
+                background: {self._background_color.darker(108).name()};
+            }}
+        """)

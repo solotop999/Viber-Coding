@@ -1,16 +1,38 @@
 """
 Redact / blur region tool.
-Preview: semi-transparent gray rectangle.
-On export: the region is blurred with Pillow (non-destructive until flatten).
+Preview while dragging: semi-transparent gray rectangle.
+Committed redact regions are blurred by the canvas/export pipeline.
 """
 from __future__ import annotations
 
-from PyQt6.QtCore import QPointF, QRectF
+from PyQt6.QtCore import QPointF, QRectF, Qt
 from PyQt6.QtGui import QColor, QPainter, QPen, QBrush
 
 from editor.tools.base_tool import Annotation, BaseTool
 
 _PREVIEW_COLOR = QColor(30, 30, 30, 170)
+_OUTER_BORDER = QColor(20, 20, 20, 150)
+_INNER_BORDER = QColor(255, 255, 255, 90)
+_PREVIEW_FILL = QColor(20, 20, 20, 35)
+_RADIUS = 6.0
+
+
+def _draw_redact_frame(painter: QPainter, rect: QRectF, preview: bool = False) -> None:
+    border_rect = rect.adjusted(0.5, 0.5, -0.5, -0.5)
+
+    if preview:
+        painter.setBrush(QBrush(_PREVIEW_FILL))
+    else:
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+
+    outer_pen = QPen(_OUTER_BORDER, 1)
+    painter.setPen(outer_pen)
+    painter.drawRoundedRect(border_rect, _RADIUS, _RADIUS)
+
+    inner_pen = QPen(_INNER_BORDER, 1)
+    painter.setPen(inner_pen)
+    painter.setBrush(Qt.BrushStyle.NoBrush)
+    painter.drawRoundedRect(border_rect.adjusted(1.5, 1.5, -1.5, -1.5), _RADIUS - 1.5, _RADIUS - 1.5)
 
 
 class RedactTool(BaseTool):
@@ -35,14 +57,11 @@ class RedactTool(BaseTool):
     def draw_preview(self, painter: QPainter) -> None:
         if self._active and self._start and self._current:
             rect = QRectF(self._start, self._current).normalized()
-            painter.setBrush(QBrush(_PREVIEW_COLOR))
-            painter.setPen(QPen(QColor(80, 80, 80), 1))
-            painter.drawRect(rect)
+            painter.fillRect(rect, _PREVIEW_COLOR)
+            _draw_redact_frame(painter, rect, preview=True)
 
 
 def render_redact(painter: QPainter, ann: Annotation) -> None:
-    """Draw the redact placeholder in the editor (actual blur applied at export)."""
+    """Committed redacts are painted from a blurred image layer in the canvas."""
     rect = QRectF(ann.start, ann.end).normalized()
-    painter.setBrush(QBrush(_PREVIEW_COLOR))
-    painter.setPen(QPen(QColor(80, 80, 80), 1))
-    painter.drawRect(rect)
+    _draw_redact_frame(painter, rect)

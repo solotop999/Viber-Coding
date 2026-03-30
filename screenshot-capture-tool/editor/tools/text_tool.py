@@ -319,6 +319,11 @@ class TextTool(BaseTool):
             self._widget.cancel()
             self._widget = None
 
+    def commit(self) -> None:
+        if self._widget:
+            self._widget._commit()
+            self._widget = None
+
 
 # ── renderer ──────────────────────────────────────────────────────────────────
 def render_text(painter: QPainter, ann: Annotation) -> None:

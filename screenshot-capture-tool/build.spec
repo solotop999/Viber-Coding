@@ -3,26 +3,17 @@
 # Build: pyinstaller build.spec
 # Output: dist/capture.exe
 
-import os
-
 block_cipher = None
 
 a = Analysis(
     ['main.py'],
     pathex=['.'],
     binaries=[],
-    datas=[
-        ('assets', 'assets'),
-    ],
-    hiddenimports=[
-        'PIL._tkinter_finder',
-        'mss.base',
-        'mss.windows',
-    ],
+    datas=[],
+    hiddenimports=[],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    # SECURITY: Exclude all network-capable Qt/Python modules
     excludes=[
         'PyQt6.QtNetwork',
         'PyQt6.QtWebEngine',
@@ -78,13 +69,13 @@ exe = EXE(
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    console=False,          # No console window (GUI app)
+    console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon='assets/icon.ico' if os.path.exists('assets/icon.ico') else None,
+    icon=None,
     version_file=None,
 )
 

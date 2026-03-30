@@ -5,7 +5,6 @@ No network calls. Purely local.
 from __future__ import annotations
 
 import mss
-import mss.tools
 from PIL import Image
 
 

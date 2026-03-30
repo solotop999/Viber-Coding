@@ -8,3 +8,4 @@ dist/
 build/
 .eggs/
 *.spec.bak
+.screenshot-tool-settings.json

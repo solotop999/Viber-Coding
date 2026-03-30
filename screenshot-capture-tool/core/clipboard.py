@@ -1,34 +1,37 @@
 """
-Copy a PIL Image to the Windows clipboard.
-Uses PyQt6's QGuiApplication.clipboard() which produces CF_DIB / CF_BITMAP
-compatible data — works in Slack, Teams, browsers, etc.
+Copy a PIL image to the Windows clipboard.
+
+Uses PNG mime data so apps that support transparency can preserve
+rounded corners and alpha.
 """
 from __future__ import annotations
 
-from PIL import Image
-from PyQt6.QtGui import QImage, QGuiApplication
 import io
+
+from PIL import Image
+from PyQt6.QtCore import QByteArray, QMimeData
+from PyQt6.QtGui import QGuiApplication, QImage
 
 
 def copy_to_clipboard(img: Image.Image) -> None:
     """
-    Flatten RGBA onto white, then copy as QImage to clipboard.
-    Flattening is necessary because most apps don't accept transparent PNGs
-    from clipboard (CF_DIB has no alpha channel).
+    Copy image as PNG mime data with alpha preserved when available.
+    Apps that only read legacy bitmap clipboard formats may still flatten
+    transparency on paste, but apps that support image/png can keep it.
     """
-    if img.mode == "RGBA":
-        background = Image.new("RGB", img.size, (255, 255, 255))
-        background.paste(img, mask=img.split()[3])
-        img = background
-    elif img.mode != "RGB":
-        img = img.convert("RGB")
+    if img.mode not in {"RGBA", "RGB"}:
+        img = img.convert("RGBA")
 
-    buf = io.BytesIO()
-    img.save(buf, format="PNG")
-    data = buf.getvalue()
+    buffer = io.BytesIO()
+    img.save(buffer, format="PNG")
+    data = buffer.getvalue()
 
     qimg = QImage()
     qimg.loadFromData(data, "PNG")
 
-    cb = QGuiApplication.clipboard()
-    cb.setImage(qimg)
+    mime = QMimeData()
+    mime.setData("image/png", QByteArray(data))
+    mime.setImageData(qimg)
+
+    clipboard = QGuiApplication.clipboard()
+    clipboard.setMimeData(mime)
