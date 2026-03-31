@@ -6,6 +6,8 @@
 
 100% open source. Runs offline, collects no data, does not track you, does not run in the background, has no ads, and stays clean and transparent.
 
+![Screenshot 2026-03-31 113711](https://github.com/user-attachments/assets/791753f6-d48e-454e-80b8-b9cc235af507)
+
 ---
 
 ### Beautiful screenshots instantly, ready to post on X
