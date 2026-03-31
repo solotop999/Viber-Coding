@@ -6,6 +6,8 @@
 
 100% Open-source. Chạy offline, không thu thập dữ liệu, không tracking, không chạy nền, không quảng cáo, sạch và minh bạch.
 
+![Screenshot 2026-03-31 113711](https://github.com/user-attachments/assets/791753f6-d48e-454e-80b8-b9cc235af507)
+
 ---
 
 ### Ảnh đẹp ngay khi chụp — sẵn sàng đăng X
