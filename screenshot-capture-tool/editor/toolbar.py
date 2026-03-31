@@ -1,22 +1,34 @@
 """Ribbon toolbar for capture actions and annotation tools."""
 from __future__ import annotations
 
-from PyQt6.QtCore import QEvent, QPoint, QRect, QSize, Qt
-from PyQt6.QtGui import QBrush, QColor, QFont, QIcon, QPainter, QPen, QPixmap
+from functools import lru_cache
+from pathlib import Path
+
+from PyQt6.QtCore import QEvent, QPoint, QRect, QSize, Qt, QUrl
+from PyQt6.QtGui import QBrush, QColor, QDesktopServices, QFont, QIcon, QPainter, QPen, QPixmap
 from PyQt6.QtWidgets import (
     QApplication,
     QButtonGroup,
     QComboBox,
     QColorDialog,
+    QFileDialog,
     QFrame,
     QGridLayout,
     QHBoxLayout,
+    QMenu,
+    QMessageBox,
     QToolButton,
     QVBoxLayout,
     QWidget,
 )
 
-from core.settings import save_presentation_background_color
+from core.paths import asset_path
+from core.settings import (
+    is_local_background_image_path,
+    save_presentation_background_color,
+    save_presentation_background_image,
+    save_presentation_background_style,
+)
 from editor.canvas import (
     AnnotationCanvas,
     TOOL_ARROW,
@@ -38,8 +50,10 @@ _BTN_W = 52
 _BTN_H = 56
 _CHIP_SZ = 16
 _CHIP_ICON_SZ = 20
+_X_PROFILE_URL = "https://x.com/solotop999"
 
 
+@lru_cache(maxsize=None)
 def _make_tool_icon(symbol: str, size: int = 28) -> QIcon:
     pixmap = QPixmap(size, size)
     pixmap.fill(Qt.GlobalColor.transparent)
@@ -133,6 +147,14 @@ def _make_tool_icon(symbol: str, size: int = 28) -> QIcon:
 
     painter.end()
     return QIcon(pixmap)
+
+
+@lru_cache(maxsize=None)
+def _load_asset_icon(name: str) -> QIcon:
+    path = asset_path(name)
+    if not path.exists():
+        return QIcon()
+    return QIcon(str(path))
 
 
 def _vsep() -> QFrame:
@@ -349,12 +371,25 @@ class _TextFormatPopup(QWidget):
 
 
 class Toolbar(QWidget):
-    def __init__(self, canvas: AnnotationCanvas, editor, presentation_color: tuple[int, int, int]) -> None:
+    def __init__(
+        self,
+        canvas: AnnotationCanvas,
+        editor,
+        presentation_color: tuple[int, int, int],
+        presentation_style: str,
+        background_image_path: str | None,
+    ) -> None:
         super().__init__()
         self._canvas = canvas
         self._editor = editor
         self._color = QColor("#19C85B")
         self._background_color = QColor(*presentation_color)
+        self._background_style = (
+            presentation_style
+            if presentation_style in {"color", "image1", "image2", "image3", "custom"}
+            else "color"
+        )
+        self._background_image_path = background_image_path
 
         self.setFixedHeight(_RIBBON_H)
         self.setStyleSheet("QWidget { background: #F3F3F3; }")
@@ -496,7 +531,32 @@ class Toolbar(QWidget):
         save_btn = _ActionBtn("save", "Save", "Save to file  Ctrl+S")
         save_btn.clicked.connect(self._editor.save_image)
 
-        for button in (undo_btn, clear_btn, copy_btn, save_btn):
+        x_btn = QToolButton()
+        x_btn.setFixedSize(_BTN_W, _BTN_H)
+        x_btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon)
+        x_btn.setIcon(_load_asset_icon("x_icon.jpg"))
+        x_btn.setIconSize(QSize(28, 28))
+        x_btn.setText("😘")
+        x_btn.setToolTip("@solotop999 on X")
+        x_btn.clicked.connect(self._open_x_profile)
+        x_btn.setStyleSheet("""
+            QToolButton {
+                border: 1px solid transparent;
+                border-radius: 3px;
+                background: transparent;
+                color: #1A1A1A;
+                padding: 2px 0 2px 0;
+            }
+            QToolButton:hover {
+                background: #E5F3FF;
+                border-color: #99CCFF;
+            }
+            QToolButton:pressed {
+                background: #B3D9FF;
+            }
+        """)
+
+        for button in (undo_btn, clear_btn, copy_btn, save_btn, x_btn):
             row.addWidget(button)
 
         vbox.addLayout(row)
@@ -576,8 +636,8 @@ class Toolbar(QWidget):
         self._bg_color_btn.setText("Color")
         self._bg_color_btn.setFixedWidth(58)
         self._bg_color_btn.setFixedHeight(24)
-        self._bg_color_btn.setToolTip("Chon mau background")
-        self._bg_color_btn.clicked.connect(self._pick_background_color)
+        self._bg_color_btn.setToolTip("Choose background source")
+        self._bg_color_btn.clicked.connect(self._show_background_source_menu)
         self._bg_color_btn.setStyleSheet("""
             QToolButton {
                 background: #FFFFFF;
@@ -658,7 +718,93 @@ class Toolbar(QWidget):
         self._sync_background_button()
         return True
 
+    def _open_x_profile(self) -> None:
+        QDesktopServices.openUrl(QUrl(_X_PROFILE_URL))
+
     def _sync_background_button(self) -> None:
+        if self._background_style == "image1":
+            self._bg_color_btn.setText("BG 1")
+            self._bg_color_btn.setStyleSheet("""
+                QToolButton {
+                    background: #FFF6E9;
+                    border: 1px solid #D3B27C;
+                    border-radius: 5px;
+                    color: #6A4A17;
+                    padding: 0 8px;
+                }
+                QToolButton:hover {
+                    border-color: #B88F4D;
+                    background: #FFF1DB;
+                }
+                QToolButton:pressed {
+                    background: #F7E3BF;
+                }
+            """)
+            return
+
+        if self._background_style == "image2":
+            self._bg_color_btn.setText("BG 2")
+            self._bg_color_btn.setStyleSheet("""
+                QToolButton {
+                    background: #EEF0FF;
+                    border: 1px solid #98A7D6;
+                    border-radius: 5px;
+                    color: #33406B;
+                    padding: 0 8px;
+                }
+                QToolButton:hover {
+                    border-color: #7385C2;
+                    background: #E6EAFF;
+                }
+                QToolButton:pressed {
+                    background: #DCE3FF;
+                }
+            """)
+            return
+
+        if self._background_style == "image3":
+            self._bg_color_btn.setText("BG 3")
+            self._bg_color_btn.setStyleSheet("""
+                QToolButton {
+                    background: #F1EEFF;
+                    border: 1px solid #A999D6;
+                    border-radius: 5px;
+                    color: #49376F;
+                    padding: 0 8px;
+                }
+                QToolButton:hover {
+                    border-color: #856EC2;
+                    background: #EAE4FF;
+                }
+                QToolButton:pressed {
+                    background: #DDD5FF;
+                }
+            """)
+            return
+
+        if self._background_style == "custom":
+            self._bg_color_btn.setText("Image")
+            self._bg_color_btn.setToolTip(self._background_image_path or "Custom background image")
+            self._bg_color_btn.setStyleSheet("""
+                QToolButton {
+                    background: #E9FFF5;
+                    border: 1px solid #79C7A0;
+                    border-radius: 5px;
+                    color: #1F5D45;
+                    padding: 0 8px;
+                }
+                QToolButton:hover {
+                    border-color: #4FA178;
+                    background: #E0F9EE;
+                }
+                QToolButton:pressed {
+                    background: #D2F2E3;
+                }
+            """)
+            return
+
+        self._bg_color_btn.setText("Color")
+        self._bg_color_btn.setToolTip("Choose background source")
         text_color = "#FFFFFF" if self._background_color.lightness() < 140 else "#1A1A1A"
         self._bg_color_btn.setStyleSheet(f"""
             QToolButton {{
@@ -675,3 +821,81 @@ class Toolbar(QWidget):
                 background: {self._background_color.darker(108).name()};
             }}
         """)
+
+    def _show_background_source_menu(self) -> None:
+        menu = QMenu(self)
+        menu.setStyleSheet("""
+            QMenu {
+                background: #FFFFFF;
+                border: 1px solid #B9C7D6;
+                padding: 4px;
+            }
+            QMenu::item {
+                padding: 6px 12px;
+                border-radius: 4px;
+            }
+            QMenu::item:selected {
+                background: #E8F3FF;
+            }
+        """)
+
+        color_action = menu.addAction("Color...")
+        bg1_action = menu.addAction("BG 1")
+        bg2_action = menu.addAction("BG 2")
+        bg3_action = menu.addAction("BG 3")
+        custom_action = menu.addAction("Custom")
+        selected = menu.exec(self._bg_color_btn.mapToGlobal(self._bg_color_btn.rect().bottomLeft()))
+        if selected is color_action:
+            self._background_style = "color"
+            self._editor.set_presentation_style("color")
+            save_presentation_background_style("color")
+            if not self._pick_background_color():
+                self._sync_background_button()
+                return
+        elif selected is bg1_action:
+            self._background_style = "image1"
+            self._editor.set_presentation_style("image1")
+            save_presentation_background_style("image1")
+        elif selected is bg2_action:
+            self._background_style = "image2"
+            self._editor.set_presentation_style("image2")
+            save_presentation_background_style("image2")
+        elif selected is bg3_action:
+            self._background_style = "image3"
+            self._editor.set_presentation_style("image3")
+            save_presentation_background_style("image3")
+        elif selected is custom_action:
+            path = self._pick_background_image()
+            if not path:
+                self._sync_background_button()
+                return
+            self._background_image_path = path
+            self._background_style = "custom"
+            self._editor.set_presentation_background_image_path(path)
+            self._editor.set_presentation_style("custom")
+            save_presentation_background_image(path)
+            save_presentation_background_style("custom")
+        else:
+            return
+
+        self._sync_background_button()
+
+    def _pick_background_image(self) -> str | None:
+        path, _selected_filter = QFileDialog.getOpenFileName(
+            self,
+            "Choose background image",
+            "",
+            "Image Files (*.png *.jpg *.jpeg *.webp *.bmp)",
+        )
+        if not path:
+            return None
+
+        if not is_local_background_image_path(path):
+            QMessageBox.warning(
+                self,
+                "Invalid image location",
+                "Please choose an image stored on this computer. Network paths are not allowed.",
+            )
+            return None
+
+        return path

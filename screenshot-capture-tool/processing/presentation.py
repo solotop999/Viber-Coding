@@ -2,13 +2,18 @@
 from __future__ import annotations
 
 import math
+from functools import lru_cache
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Literal
 
 from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 
+from core.paths import asset_path
+from core.settings import is_local_background_image_path
+
 PresentationLayout = Literal["fit", "wide", "post", "phone"]
-PresentationStyle = Literal["color"]
+PresentationStyle = Literal["color", "image1", "image2", "image3", "custom"]
 
 _LAYOUT_RATIOS: dict[PresentationLayout, float] = {
     "fit": 1.0,
@@ -20,6 +25,7 @@ _LAYOUT_RATIOS: dict[PresentationLayout, float] = {
 _FIT_PADDING = 36
 
 _DEFAULT_BACKGROUND_COLOR = (180, 194, 220)
+_ASSET_FILES = ("bg1.jpg", "bg2.jpg", "bg3.jpg")
 
 
 @dataclass(slots=True)
@@ -28,6 +34,7 @@ class PresentationSettings:
     layout: PresentationLayout = "fit"
     style: PresentationStyle = "color"
     overlay_color: tuple[int, int, int] = _DEFAULT_BACKGROUND_COLOR
+    background_image_path: str | None = None
 
 
 @dataclass(slots=True)
@@ -73,25 +80,33 @@ def render_background(
     canvas_size: tuple[int, int],
     style: PresentationStyle,
     overlay_color: tuple[int, int, int] | None = None,
+    background_image_path: str | None = None,
 ) -> Image.Image:
     """Build the blurred presentation background for preview/export."""
     if background_source.mode not in {"RGB", "RGBA"}:
         background_source = background_source.convert("RGBA")
 
-    rgb_source = _flatten_source(background_source)
-    fitted = ImageOps.fit(
-        rgb_source,
-        canvas_size,
-        method=Image.Resampling.LANCZOS,
-        centering=(0.5, 0.5),
-    )
+    if style == "color":
+        return Image.new("RGB", canvas_size, overlay_color or _DEFAULT_BACKGROUND_COLOR)
 
-    blur_radius = max(28, round(min(canvas_size) * 0.04))
+    fitted = _build_custom_background(canvas_size, background_image_path) if style == "custom" else None
+    if fitted is None:
+        fitted = _build_asset_background(canvas_size, style)
+    if fitted is None:
+        rgb_source = _flatten_source(background_source)
+        fitted = ImageOps.fit(
+            rgb_source,
+            canvas_size,
+            method=Image.Resampling.LANCZOS,
+            centering=(0.5, 0.5),
+        )
+
+    blur_radius = max(6, round(min(canvas_size) * 0.01))
     blurred = fitted.filter(ImageFilter.GaussianBlur(radius=blur_radius))
-    solid = Image.new("RGB", canvas_size, overlay_color or _DEFAULT_BACKGROUND_COLOR)
-    texture = ImageEnhance.Color(blurred).enhance(0.18)
-    texture = ImageEnhance.Contrast(texture).enhance(0.88)
-    return Image.blend(solid, texture, 0.08)
+    blurred = ImageEnhance.Color(blurred).enhance(1.18)
+    blurred = ImageEnhance.Contrast(blurred).enhance(1.08)
+    blurred = ImageEnhance.Brightness(blurred).enhance(0.94)
+    return _apply_soft_focus(blurred)
 
 
 def compose_presentation(
@@ -110,6 +125,7 @@ def compose_presentation(
         geometry.canvas_size,
         settings.style,
         settings.overlay_color,
+        settings.background_image_path,
     ).convert("RGBA")
 
     shadow = _render_shadow(subject.getchannel("A"), geometry.canvas_size, geometry.subject_pos)
@@ -126,6 +142,81 @@ def _flatten_source(img: Image.Image) -> Image.Image:
     else:
         backdrop.paste(img.convert("RGB"))
     return backdrop
+
+
+@lru_cache(maxsize=1)
+def _load_asset_backgrounds() -> tuple[Image.Image, ...]:
+    images: list[Image.Image] = []
+    for name in _ASSET_FILES:
+        path = asset_path(name)
+        if not path.exists():
+            continue
+        with Image.open(path) as image:
+            images.append(image.convert("RGB"))
+    return tuple(images)
+
+
+@lru_cache(maxsize=4)
+def _load_custom_background(path: str) -> Image.Image | None:
+    image_path = Path(path)
+    if not image_path.exists():
+        return None
+
+    try:
+        with Image.open(image_path) as image:
+            return image.convert("RGB")
+    except (OSError, ValueError):
+        return None
+
+
+def _build_asset_background(
+    canvas_size: tuple[int, int],
+    style: PresentationStyle,
+) -> Image.Image | None:
+    assets = _load_asset_backgrounds()
+    if not assets:
+        return None
+
+    if style == "image1":
+        index = 0
+    elif style == "image2":
+        index = 1
+    else:
+        index = 2
+
+    if len(assets) <= index:
+        index = 0
+
+    return ImageOps.fit(
+        assets[index],
+        canvas_size,
+        method=Image.Resampling.LANCZOS,
+        centering=(0.5, 0.5),
+    )
+
+
+def _build_custom_background(
+    canvas_size: tuple[int, int],
+    background_image_path: str | None,
+) -> Image.Image | None:
+    if not is_local_background_image_path(background_image_path):
+        return None
+
+    custom = _load_custom_background(background_image_path)
+    if custom is None:
+        return None
+
+    return ImageOps.fit(
+        custom,
+        canvas_size,
+        method=Image.Resampling.LANCZOS,
+        centering=(0.5, 0.5),
+    )
+
+
+def _apply_soft_focus(image: Image.Image) -> Image.Image:
+    glow = image.filter(ImageFilter.GaussianBlur(radius=2))
+    return Image.blend(image, glow, 0.01)
 
 
 def _render_shadow(

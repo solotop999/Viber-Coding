@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from PyQt6.QtCore import QPointF, QRectF, Qt
 from PyQt6.QtGui import (
-    QColor, QPainter, QPen, QBrush, QFont, QFontMetricsF,
+    QColor, QPainter, QPen, QBrush, QFont,
 )
 
 from editor.tools.base_tool import Annotation, BaseTool

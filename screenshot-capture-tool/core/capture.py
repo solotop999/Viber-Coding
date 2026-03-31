@@ -5,22 +5,21 @@ and lets the user drag a rectangle to select a region.
 """
 from __future__ import annotations
 
-import io
-
 from PIL import Image
 from PyQt6.QtCore import QPoint, QRect, Qt, pyqtSignal
-from PyQt6.QtGui import QColor, QCursor, QKeyEvent, QPainter, QPen, QPixmap
+from PyQt6.QtGui import QColor, QCursor, QImage, QKeyEvent, QPainter, QPen, QPixmap
 from PyQt6.QtWidgets import QApplication, QWidget
 
 from core.screenshot import grab_all_monitors
 
 
 def _pil_to_qpixmap(img: Image.Image) -> QPixmap:
-    buffer = io.BytesIO()
-    img.save(buffer, format="PNG")
-    pixmap = QPixmap()
-    pixmap.loadFromData(buffer.getvalue(), "PNG")
-    return pixmap
+    if img.mode != "RGBA":
+        img = img.convert("RGBA")
+    raw = img.tobytes("raw", "RGBA")
+    qimg = QImage(raw, img.width, img.height, img.width * 4,
+                  QImage.Format.Format_RGBA8888).copy()
+    return QPixmap.fromImage(qimg)
 
 
 class SelectionOverlay(QWidget):

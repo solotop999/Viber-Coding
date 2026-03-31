@@ -11,7 +11,7 @@ def apply_rounded_corners(img: Image.Image, radius: int = 18) -> Image.Image:
     """
     img = img.convert("RGBA")
     w, h = img.size
-    scale = 4
+    scale = 2
     big = Image.new("L", (w * scale, h * scale), 0)
     draw = ImageDraw.Draw(big)
     draw.rounded_rectangle(

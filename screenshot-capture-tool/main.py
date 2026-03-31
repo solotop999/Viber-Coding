@@ -13,6 +13,7 @@ from __future__ import annotations
 import ctypes
 import os
 import sys
+from pathlib import Path
 
 os.environ["QT_NETWORK_PROXY_AUTOCONF"] = "0"
 os.environ["QT_NO_GLIB"] = "1"
@@ -21,10 +22,12 @@ os.environ["QT_ENABLE_HIGHDPI_SCALING"] = "0"
 os.environ["QT_SCALE_FACTOR"] = "1"
 
 from PIL import Image
-from PyQt6.QtCore import QTimer
+from PyQt6.QtCore import QTimer, Qt
+from PyQt6.QtGui import QIcon, QPainter, QPainterPath, QPixmap
 from PyQt6.QtWidgets import QApplication
 
 from core.capture import SelectionOverlay
+from core.paths import asset_path
 from core.screenshot import grab_region
 from editor.editor_window import EditorWindow
 
@@ -51,11 +54,42 @@ def _enable_windows_dpi_awareness() -> None:
         pass
 
 
+def _load_app_icon() -> QIcon:
+    icon_path = asset_path("logo.jpg")
+    if not icon_path.exists():
+        return QIcon()
+
+    source = QPixmap(str(icon_path))
+    if source.isNull():
+        return QIcon()
+
+    size = min(source.width(), source.height())
+    cropped = source.copy(
+        (source.width() - size) // 2,
+        (source.height() - size) // 2,
+        size,
+        size,
+    )
+
+    circular = QPixmap(size, size)
+    circular.fill(Qt.GlobalColor.transparent)
+
+    painter = QPainter(circular)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    path = QPainterPath()
+    path.addEllipse(0, 0, size, size)
+    painter.setClipPath(path)
+    painter.drawPixmap(0, 0, cropped)
+    painter.end()
+    return QIcon(circular)
+
+
 class CaptureApp:
     def __init__(self, app: QApplication) -> None:
         self._app = app
         self._overlay: SelectionOverlay | None = None
         self._editor: EditorWindow | None = None
+        self._editor_prewarm_scheduled = False
 
     def start(self) -> None:
         self._start_capture()
@@ -67,27 +101,49 @@ class CaptureApp:
         overlay = SelectionOverlay()
         overlay.region_selected.connect(self._on_region_selected)
         overlay.cancelled.connect(self._on_initial_capture_cancelled)
-        overlay.showFullScreen()
+        overlay.show()
+        overlay.raise_()
+        overlay.activateWindow()
         self._overlay = overlay
+        self._schedule_editor_prewarm()
+
+    def _schedule_editor_prewarm(self) -> None:
+        if self._editor or self._editor_prewarm_scheduled:
+            return
+        self._editor_prewarm_scheduled = True
+        QTimer.singleShot(0, self._prewarm_editor)
+
+    def _prewarm_editor(self) -> None:
+        self._editor_prewarm_scheduled = False
+        if self._editor is not None:
+            return
+
+        placeholder = Image.new("RGBA", (64, 64), (255, 255, 255, 0))
+        editor = EditorWindow(placeholder)
+        editor.recapture_requested.connect(self._start_recapture)
+        editor.destroyed.connect(self._on_editor_destroyed)
+        editor.hide()
+        self._editor = editor
 
     def _start_recapture(self) -> None:
         if self._editor:
-            self._editor.prepare_for_recapture()
-            self._editor.hide()
-        QTimer.singleShot(150, self._show_recapture_overlay)
+            self._editor.hide_for_recapture()
+        QTimer.singleShot(220, self._show_recapture_overlay)
 
     def _show_recapture_overlay(self) -> None:
         overlay = SelectionOverlay()
         overlay.region_selected.connect(self._on_recapture_region)
         overlay.cancelled.connect(self._on_recapture_cancelled)
-        overlay.showFullScreen()
+        overlay.show()
+        overlay.raise_()
+        overlay.activateWindow()
         self._overlay = overlay
 
     def _capture_image(self, x: int, y: int, w: int, h: int) -> Image.Image:
         from processing.corners import apply_rounded_corners
 
         image = grab_region(x, y, w, h)
-        return apply_rounded_corners(image.convert("RGBA"), radius=28)
+        return apply_rounded_corners(image.convert("RGBA"), radius=22)
 
     def _on_region_selected(self, x: int, y: int, w: int, h: int) -> None:
         self._overlay = None
@@ -101,21 +157,20 @@ class CaptureApp:
         self._overlay = None
         if self._editor:
             self._editor.update_image(self._capture_image(x, y, w, h))
-            self._editor.show()
-            self._editor.raise_()
-            self._editor.activateWindow()
+            self._editor.restore_after_recapture()
 
     def _on_recapture_cancelled(self) -> None:
         self._overlay = None
         if self._editor:
-            self._editor.show()
-            self._editor.raise_()
-            self._editor.activateWindow()
+            self._editor.restore_after_recapture()
 
     def _open_editor(self, image: Image.Image) -> None:
-        self._editor = EditorWindow(image)
-        self._editor.recapture_requested.connect(self._start_recapture)
-        self._editor.destroyed.connect(self._on_editor_destroyed)
+        if self._editor is None:
+            self._editor = EditorWindow(image)
+            self._editor.recapture_requested.connect(self._start_recapture)
+            self._editor.destroyed.connect(self._on_editor_destroyed)
+        else:
+            self._editor.update_image(image)
         self._editor.show()
         self._editor.raise_()
         self._editor.activateWindow()
@@ -130,6 +185,10 @@ class CaptureApp:
 def main() -> None:
     _enable_windows_dpi_awareness()
     app = QApplication(sys.argv)
+    app.setApplicationDisplayName("Solotop Capture")
+    app_icon = _load_app_icon()
+    if not app_icon.isNull():
+        app.setWindowIcon(app_icon)
     app.setQuitOnLastWindowClosed(True)
 
     if not QApplication.screens():

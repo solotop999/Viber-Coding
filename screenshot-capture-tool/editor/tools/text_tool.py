@@ -7,7 +7,7 @@ On Enter (without Shift) or click-outside, the text is baked into an Annotation.
 from __future__ import annotations
 
 from PyQt6.QtCore  import QPoint, QPointF, QRect, QRectF, Qt, QTimer
-from PyQt6.QtGui   import QBrush, QColor, QFont, QPainter, QPen, QTextOption
+from PyQt6.QtGui   import QColor, QFont, QFontMetricsF, QPainter, QPainterPath, QPen, QTextOption
 from PyQt6.QtWidgets import QApplication, QTextEdit, QWidget
 
 from editor.tools.base_tool import Annotation, BaseTool
@@ -17,6 +17,9 @@ _HANDLE = 8     # thickness of resize-handle border (px)
 _TITLE  = 18    # height of the drag bar at the top (px)
 _MIN_W  = 120   # minimum inner width
 _MIN_H  = 40    # minimum inner height
+_TEXT_PAD_X = 12
+_TEXT_PAD_Y = 10
+_CARD_RADIUS = 12
 
 # ── cursor mapping per handle name ──────────────────────────────────────────
 _CURSORS: dict[str, Qt.CursorShape] = {
@@ -70,8 +73,21 @@ class _ResizableTextWidget(QWidget):
         # Inner text editor
         self._te = _InnerEditor(self)
         self._te.setFont(font)
+        self._te.setAcceptRichText(False)
+        self._te.setPlaceholderText("Type note...")
+        self._te.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._te.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._te.document().setDocumentMargin(0)
         self._te.setStyleSheet(
-            f"background: transparent; border: none; color: {color.name()};"
+            f"""
+            QTextEdit {{
+                background: transparent;
+                border: none;
+                color: {color.name()};
+                padding: {_TEXT_PAD_Y}px {_TEXT_PAD_X}px;
+                selection-background-color: rgba(45, 137, 239, 90);
+            }}
+            """
         )
         self._te.setFrameStyle(0)
         self._te.setWordWrapMode(QTextOption.WrapMode.WordWrap)
@@ -137,35 +153,42 @@ class _ResizableTextWidget(QWidget):
     def paintEvent(self, _event) -> None:
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        c   = self._color
-        h2  = _HANDLE // 2
-        bw  = self.width()  - _HANDLE
-        bh  = self.height() - _HANDLE
+        c = self._color
+        frame = QRectF(_HANDLE / 2, _HANDLE / 2, self.width() - _HANDLE, self.height() - _HANDLE)
+        content = QRectF(frame.left(), frame.top() + _TITLE - 2, frame.width(), frame.height() - _TITLE + 2)
 
-        # Dashed outer border
-        p.setPen(QPen(c, 1, Qt.PenStyle.DashLine))
-        p.setBrush(Qt.BrushStyle.NoBrush)
-        p.drawRect(h2, h2, bw, bh)
+        surface, border, title_fill, handle_fill, label_fill, label_text = _note_palette(c)
 
-        # Drag bar fill
+        shadow_rect = QRectF(content.left(), content.top() + 3, content.width(), content.height())
         p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(QBrush(QColor(c.red(), c.green(), c.blue(), 30)))
-        p.drawRect(h2, h2, bw, _TITLE - h2)
+        p.setBrush(QColor(8, 12, 20, 34))
+        p.drawRoundedRect(shadow_rect, _CARD_RADIUS, _CARD_RADIUS)
 
-        # "drag" label inside bar
-        p.setPen(QPen(c, 1))
-        p.setFont(QFont("Arial", 7))
-        p.drawText(
-            QRect(h2 + 4, h2, 60, _TITLE - h2),
-            Qt.AlignmentFlag.AlignVCenter,
-            "drag",
-        )
+        p.setBrush(surface)
+        p.drawRoundedRect(content, _CARD_RADIUS, _CARD_RADIUS)
 
-        # Resize handles
-        p.setBrush(QBrush(QColor(255, 255, 255, 210)))
-        p.setPen(QPen(c, 1))
+        title_rect = QRectF(frame.left(), frame.top(), frame.width(), _TITLE + 8)
+        title_path = QPainterPath()
+        title_path.addRoundedRect(title_rect, _CARD_RADIUS, _CARD_RADIUS)
+        p.setBrush(title_fill)
+        p.drawPath(title_path)
+
+        p.setPen(QPen(border, 1.2))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.drawRoundedRect(content, _CARD_RADIUS, _CARD_RADIUS)
+
+        drag_chip = QRectF(frame.left() + 8, frame.top() + 4, 46, 12)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(label_fill)
+        p.drawRoundedRect(drag_chip, 6, 6)
+        p.setPen(QPen(label_text))
+        p.setFont(QFont("Arial", 7, QFont.Weight.DemiBold))
+        p.drawText(drag_chip, Qt.AlignmentFlag.AlignCenter, "DRAG")
+
+        p.setBrush(handle_fill)
+        p.setPen(QPen(border, 1))
         for r in self._handle_rects().values():
-            p.drawRect(r)
+            p.drawRoundedRect(QRectF(r), 2, 2)
 
     # ── mouse events ─────────────────────────────────────────────────────────
     def mousePressEvent(self, event) -> None:
@@ -331,7 +354,6 @@ def render_text(painter: QPainter, ann: Annotation) -> None:
     font = QFont("Arial", ann.font_size)
     font.setBold(ann.font_bold)
     painter.setFont(font)
-    painter.setPen(QPen(ann.color))
 
     sx, sy = ann.start.x(), ann.start.y()
     ex, ey = ann.end.x(),   ann.end.y()
@@ -339,14 +361,70 @@ def render_text(painter: QPainter, ann: Annotation) -> None:
     box_h  = ey - sy
 
     if box_w > _HANDLE * 2 and box_h > _TITLE + _HANDLE:
-        # Draw text inside the same inner area as the editor
-        text_rect = QRectF(
+        outer_rect = QRectF(
             sx + _HANDLE,
             sy + _TITLE,
             box_w - 2 * _HANDLE,
             box_h - _TITLE - _HANDLE,
         )
-        painter.drawText(text_rect, Qt.TextFlag.TextWordWrap, ann.text)
+        _draw_note_card(painter, outer_rect, ann.text, ann.color, font)
     else:
         # Fallback for old single-point annotations
-        painter.drawText(ann.start, ann.text)
+        fallback = QRectF(ann.start.x(), ann.start.y(), 220, ann.font_size * 2.4)
+        _draw_note_card(painter, fallback, ann.text, ann.color, font)
+
+
+def _note_palette(color: QColor) -> tuple[QColor, QColor, QColor, QColor, QColor, QColor]:
+    light_text = color.lightness() > 165
+    if light_text:
+        surface = QColor(16, 20, 28, 228)
+        border = QColor(255, 255, 255, 90)
+        title_fill = QColor(255, 255, 255, 26)
+        handle_fill = QColor(255, 255, 255, 205)
+        label_fill = QColor(255, 255, 255, 220)
+        label_text = QColor(18, 22, 30)
+    else:
+        surface = QColor(255, 255, 255, 232)
+        border = QColor(color.red(), color.green(), color.blue(), 135)
+        title_fill = QColor(color.red(), color.green(), color.blue(), 34)
+        handle_fill = QColor(255, 255, 255, 220)
+        label_fill = QColor(18, 22, 30, 208)
+        label_text = QColor(255, 255, 255)
+    return surface, border, title_fill, handle_fill, label_fill, label_text
+
+
+def _draw_note_card(
+    painter: QPainter,
+    rect: QRectF,
+    text: str,
+    color: QColor,
+    font: QFont,
+) -> None:
+    if not text.strip():
+        return
+
+    metrics = QFontMetricsF(font)
+    available = rect.adjusted(_TEXT_PAD_X, _TEXT_PAD_Y, -_TEXT_PAD_X, -_TEXT_PAD_Y)
+    text_flags = int(Qt.TextFlag.TextWordWrap | Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+    text_bounds = metrics.boundingRect(available, text_flags, text)
+
+    card_width = max(84.0, min(rect.width(), text_bounds.width() + _TEXT_PAD_X * 2))
+    card_height = max(metrics.height() + _TEXT_PAD_Y * 2, min(rect.height(), text_bounds.height() + _TEXT_PAD_Y * 2))
+    card_rect = QRectF(rect.left(), rect.top(), card_width, card_height)
+    text_rect = card_rect.adjusted(_TEXT_PAD_X, _TEXT_PAD_Y - 1, -_TEXT_PAD_X, -_TEXT_PAD_Y)
+
+    surface, border, _title_fill, _handle_fill, _label_fill, _label_text = _note_palette(color)
+
+    shadow_rect = QRectF(card_rect.left(), card_rect.top() + 3, card_rect.width(), card_rect.height())
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.setBrush(QColor(8, 12, 20, 42))
+    painter.drawRoundedRect(shadow_rect, _CARD_RADIUS, _CARD_RADIUS)
+
+    painter.setBrush(surface)
+    painter.drawRoundedRect(card_rect, _CARD_RADIUS, _CARD_RADIUS)
+    painter.setPen(QPen(border, 1.15))
+    painter.drawRoundedRect(card_rect, _CARD_RADIUS, _CARD_RADIUS)
+
+    painter.setFont(font)
+    painter.setPen(QPen(color))
+    painter.drawText(text_rect, text_flags, text)

@@ -1,16 +1,19 @@
 """Main annotation editor window."""
 from __future__ import annotations
 
+import ctypes
+import sys
 from datetime import datetime
 from pathlib import Path
 
 from PIL import Image
-from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QCloseEvent, QKeySequence, QShortcut
+from PyQt6.QtCore import QEasingCurve, QEventLoop, QPropertyAnimation, Qt, pyqtSignal
+from PyQt6.QtGui import QCloseEvent, QFont, QKeySequence, QShortcut
 from PyQt6.QtWidgets import (
     QApplication,
     QFileDialog,
     QFrame,
+    QGraphicsOpacityEffect,
     QLabel,
     QMessageBox,
     QScrollArea,
@@ -20,10 +23,16 @@ from PyQt6.QtWidgets import (
 )
 
 from core.clipboard import copy_to_clipboard
-from core.settings import load_presentation_background_color
+from core.settings import (
+    is_local_background_image_path,
+    load_presentation_background_color,
+    load_presentation_background_image,
+    load_presentation_background_style,
+)
 from editor.canvas import AnnotationCanvas
 from editor.presentation_view import PresentationView
 from editor.toolbar import Toolbar
+from processing.presentation import PresentationSettings
 
 
 def _desktop_dir() -> Path:
@@ -42,30 +51,57 @@ class EditorWindow(QWidget):
     def __init__(self, pil_image: Image.Image) -> None:
         super().__init__()
 
-        self.setWindowTitle("Capture")
+        self.setWindowTitle("Solotop Capture")
         self.setWindowFlags(
             Qt.WindowType.Window
             | Qt.WindowType.WindowCloseButtonHint
             | Qt.WindowType.WindowMinimizeButtonHint
             | Qt.WindowType.WindowMaximizeButtonHint
         )
+        app_icon = QApplication.windowIcon()
+        if not app_icon.isNull():
+            self.setWindowIcon(app_icon)
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         self.setStyleSheet("QWidget { background: #FFFFFF; }")
         self.setMinimumSize(700, 500)
 
-        self._canvas = AnnotationCanvas(pil_image)
-        self._presentation_view = PresentationView(self._canvas)
         self._presentation_color = load_presentation_background_color()
-        self._presentation_view.set_overlay_color(self._presentation_color)
-        self._toolbar = Toolbar(self._canvas, self, self._presentation_color)
+        self._presentation_style = load_presentation_background_style()
+        self._presentation_background_image = load_presentation_background_image()
+        if self._presentation_background_image and (
+            not is_local_background_image_path(self._presentation_background_image)
+            or not Path(self._presentation_background_image).exists()
+        ):
+            self._presentation_background_image = None
+        if self._presentation_style == "custom" and not self._presentation_background_image:
+            self._presentation_style = "color"
+
+        self._canvas = AnnotationCanvas(pil_image)
+        self._presentation_view = PresentationView(
+            self._canvas,
+            settings=PresentationSettings(
+                enabled=True,
+                layout="fit",
+                style=self._presentation_style,
+                overlay_color=self._presentation_color,
+                background_image_path=self._presentation_background_image,
+            ),
+        )
+        self._toolbar = Toolbar(
+            self._canvas,
+            self,
+            self._presentation_color,
+            self._presentation_style,
+            self._presentation_background_image,
+        )
         self._toolbar.setMinimumWidth(self._toolbar.sizeHint().width())
         self._install_shortcuts()
 
-        scroll = QScrollArea()
-        scroll.setWidget(self._presentation_view)
-        scroll.setWidgetResizable(False)
-        scroll.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        scroll.setStyleSheet("""
+        self._scroll = QScrollArea()
+        self._scroll.setWidget(self._presentation_view)
+        self._scroll.setWidgetResizable(False)
+        self._scroll.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._scroll.setStyleSheet("""
             QScrollArea { background: #FFFFFF; border: none; }
             QScrollBar:horizontal { height: 12px; background: #F0F0F0; }
             QScrollBar:vertical   { width: 12px; background: #F0F0F0; }
@@ -76,6 +112,7 @@ class EditorWindow(QWidget):
             QScrollBar::handle:hover { background: #A0A0A0; }
             QScrollBar::add-line, QScrollBar::sub-line { width: 0; height: 0; }
         """)
+        self._init_copy_toast()
 
         self._status = QLabel()
         self._status.setFixedHeight(20)
@@ -96,7 +133,7 @@ class EditorWindow(QWidget):
         layout.setSpacing(0)
         layout.addWidget(self._toolbar)
         layout.addWidget(divider)
-        layout.addWidget(scroll, 1)
+        layout.addWidget(self._scroll, 1)
         layout.addWidget(self._status)
 
         screen = QApplication.primaryScreen().availableGeometry()
@@ -115,6 +152,47 @@ class EditorWindow(QWidget):
 
         self._new_shortcut = QShortcut(QKeySequence("Ctrl+N"), self)
         self._new_shortcut.activated.connect(self.request_recapture)
+
+    def _init_copy_toast(self) -> None:
+        self._copy_toast = QLabel("Copied", self._scroll.viewport())
+        self._copy_toast.hide()
+        self._copy_toast.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self._copy_toast.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._copy_toast.setFont(QFont("Segoe UI", 39, QFont.Weight.DemiBold))
+        self._copy_toast.setStyleSheet("""
+            QLabel {
+                background: rgba(20, 24, 32, 220);
+                color: white;
+                border-radius: 24px;
+                padding: 18px 36px;
+            }
+        """)
+
+        self._copy_toast_effect = QGraphicsOpacityEffect(self._copy_toast)
+        self._copy_toast_effect.setOpacity(0.0)
+        self._copy_toast.setGraphicsEffect(self._copy_toast_effect)
+
+        self._copy_toast_anim = QPropertyAnimation(self._copy_toast_effect, b"opacity", self)
+        self._copy_toast_anim.setDuration(2000)
+        self._copy_toast_anim.setStartValue(1.0)
+        self._copy_toast_anim.setEndValue(0.0)
+        self._copy_toast_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self._copy_toast_anim.finished.connect(self._copy_toast.hide)
+
+    def _show_copy_toast(self) -> None:
+        self._copy_toast_anim.stop()
+        self._copy_toast_effect.setOpacity(1.0)
+        self._copy_toast.adjustSize()
+        self._position_copy_toast()
+        self._copy_toast.show()
+        self._copy_toast.raise_()
+        self._copy_toast_anim.start()
+
+    def _position_copy_toast(self) -> None:
+        viewport = self._scroll.viewport()
+        x = max(0, (viewport.width() - self._copy_toast.width()) // 2)
+        y = max(0, (viewport.height() - self._copy_toast.height()) // 2)
+        self._copy_toast.move(x, y)
 
     def _set_image_status(self, size: tuple[int, int]) -> None:
         width, height = size
@@ -142,6 +220,25 @@ class EditorWindow(QWidget):
     def prepare_for_recapture(self) -> None:
         self._canvas.cancel_active_tool()
 
+    def hide_for_recapture(self) -> None:
+        self.prepare_for_recapture()
+        self.setWindowOpacity(0.0)
+        self.hide()
+
+        if sys.platform == "win32":
+            try:
+                ctypes.windll.user32.ShowWindow(int(self.winId()), 0)
+            except Exception:
+                pass
+
+        QApplication.processEvents(QEventLoop.ProcessEventsFlag.AllEvents, 80)
+
+    def restore_after_recapture(self) -> None:
+        self.setWindowOpacity(1.0)
+        self.show()
+        self.raise_()
+        self.activateWindow()
+
     def request_recapture(self) -> None:
         self.prepare_for_recapture()
         self.recapture_requested.emit()
@@ -156,6 +253,7 @@ class EditorWindow(QWidget):
         try:
             copy_to_clipboard(self._canvas.flatten_to_pil(self._presentation_view.settings()))
             self._status.setText("  Copied to clipboard!")
+            self._show_copy_toast()
         except Exception as exc:
             QMessageBox.warning(self, "Copy failed", str(exc))
 
@@ -230,8 +328,23 @@ class EditorWindow(QWidget):
         self._presentation_color = color
         self._presentation_view.set_overlay_color(color)
 
+    def set_presentation_style(self, style: str) -> None:
+        self._canvas.commit_active_tool()
+        self._presentation_style = style
+        self._presentation_view.set_style(style)
+
+    def set_presentation_background_image_path(self, path: str | None) -> None:
+        self._canvas.commit_active_tool()
+        self._presentation_background_image = path
+        self._presentation_view.set_background_image_path(path)
+
     def closeEvent(self, event: QCloseEvent) -> None:
         self._canvas.cancel_active_tool()
         super().closeEvent(event)
         if event.isAccepted():
             QApplication.instance().quit()
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        if hasattr(self, "_copy_toast") and self._copy_toast.isVisible():
+            self._position_copy_toast()

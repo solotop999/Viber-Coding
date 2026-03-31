@@ -3,12 +3,30 @@ from __future__ import annotations
 
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 _DEFAULT_PRESENTATION_BG = (180, 194, 220)
+_DEFAULT_PRESENTATION_STYLE = "color"
 _SETTINGS_SUBDIR = "ScreenshotCaptureTool"
 _SETTINGS_FILE = "settings.json"
 _PRESENTATION_BG_KEY = "presentation_background_color"
+_PRESENTATION_STYLE_KEY = "presentation_background_style"
+_PRESENTATION_IMAGE_KEY = "presentation_background_image"
+
+
+def is_local_background_image_path(path: str | None) -> bool:
+    if not isinstance(path, str):
+        return False
+
+    candidate = path.strip()
+    if not candidate or "://" in candidate:
+        return False
+
+    windows_path = PureWindowsPath(candidate)
+    if candidate.startswith("\\\\") or str(windows_path.drive).startswith("\\\\"):
+        return False
+
+    return Path(candidate).is_absolute()
 
 
 def load_presentation_background_color() -> tuple[int, int, int]:
@@ -30,6 +48,56 @@ def save_presentation_background_color(color: tuple[int, int, int]) -> None:
     data[_PRESENTATION_BG_KEY] = [red, green, blue]
     payload = json.dumps(data, indent=2)
 
+    for settings_path in (_preferred_settings_path(), _fallback_settings_path()):
+        try:
+            settings_path.parent.mkdir(parents=True, exist_ok=True)
+            settings_path.write_text(payload, encoding="utf-8")
+            return
+        except OSError:
+            continue
+
+
+def load_presentation_background_style() -> str:
+    data = _read_settings()
+    raw = data.get(_PRESENTATION_STYLE_KEY)
+    if isinstance(raw, str) and raw in {"color", "image1", "image2", "image3", "custom"}:
+        return raw
+    return _DEFAULT_PRESENTATION_STYLE
+
+
+def save_presentation_background_style(style: str) -> None:
+    if style not in {"color", "image1", "image2", "image3", "custom"}:
+        style = _DEFAULT_PRESENTATION_STYLE
+
+    data = _read_settings()
+    data[_PRESENTATION_STYLE_KEY] = style
+    payload = json.dumps(data, indent=2)
+
+    for settings_path in (_preferred_settings_path(), _fallback_settings_path()):
+        try:
+            settings_path.parent.mkdir(parents=True, exist_ok=True)
+            settings_path.write_text(payload, encoding="utf-8")
+            return
+        except OSError:
+            continue
+
+
+def load_presentation_background_image() -> str | None:
+    data = _read_settings()
+    raw = data.get(_PRESENTATION_IMAGE_KEY)
+    if is_local_background_image_path(raw):
+        return raw
+    return None
+
+
+def save_presentation_background_image(path: str | None) -> None:
+    data = _read_settings()
+    if is_local_background_image_path(path):
+        data[_PRESENTATION_IMAGE_KEY] = path
+    else:
+        data.pop(_PRESENTATION_IMAGE_KEY, None)
+
+    payload = json.dumps(data, indent=2)
     for settings_path in (_preferred_settings_path(), _fallback_settings_path()):
         try:
             settings_path.parent.mkdir(parents=True, exist_ok=True)

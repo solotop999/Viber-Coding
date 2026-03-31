@@ -43,11 +43,12 @@ _DEFAULT_COLOR = "#19C85B"
 
 
 def _pil_to_qpixmap(img: Image.Image) -> QPixmap:
-    buffer = io.BytesIO()
-    img.save(buffer, format="PNG")
-    pixmap = QPixmap()
-    pixmap.loadFromData(buffer.getvalue(), "PNG")
-    return pixmap
+    if img.mode != "RGBA":
+        img = img.convert("RGBA")
+    raw = img.tobytes("raw", "RGBA")
+    qimg = QImage(raw, img.width, img.height, img.width * 4,
+                  QImage.Format.Format_RGBA8888).copy()
+    return QPixmap.fromImage(qimg)
 
 
 class AnnotationCanvas(QWidget):
