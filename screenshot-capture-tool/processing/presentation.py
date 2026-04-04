@@ -14,6 +14,24 @@ from core.settings import is_local_background_image_path
 
 PresentationLayout = Literal["fit", "wide", "post", "phone"]
 PresentationStyle = Literal["color", "image1", "image2", "image3", "custom"]
+PresentationColorMode = Literal["solid", "gradient"]
+PresentationGradientPreset = Literal[
+    "peach",
+    "mint",
+    "dusk",
+    "ocean",
+    "rose",
+    "lemon",
+    "sunset",
+    "berry",
+    "royal",
+    "apple_pink",
+    "apple_peach",
+    "apple_sky",
+    "apple_mint",
+    "apple_lilac",
+    "apple_blue",
+]
 
 _LAYOUT_RATIOS: dict[PresentationLayout, float] = {
     "fit": 1.0,
@@ -22,10 +40,32 @@ _LAYOUT_RATIOS: dict[PresentationLayout, float] = {
     "phone": 9 / 16,
 }
 
-_FIT_PADDING = 36
+_FIT_PADDING = 24
+_FRAME_RATIO = 0.068
+_MIN_FRAME = 44
+_BACKGROUND_IMAGE_SCALE = 0.86
 
 _DEFAULT_BACKGROUND_COLOR = (180, 194, 220)
+_DEFAULT_COLOR_MODE: PresentationColorMode = "solid"
+_DEFAULT_GRADIENT_PRESET: PresentationGradientPreset = "apple_sky"
 _ASSET_FILES = ("bg1.jpg", "bg2.jpg", "bg3.jpg")
+_GRADIENT_PRESETS: dict[PresentationGradientPreset, tuple[tuple[int, int, int], tuple[int, int, int], str]] = {
+    "peach": ((255, 245, 232), (248, 190, 155), "vertical"),
+    "mint": ((236, 255, 247), (118, 213, 185), "diag_up"),
+    "dusk": ((240, 232, 255), (149, 138, 225), "diag_down"),
+    "ocean": ((232, 245, 255), (77, 142, 219), "horizontal"),
+    "rose": ((255, 250, 252), (236, 166, 196), "vertical"),
+    "lemon": ((255, 255, 255), (247, 221, 125), "vertical"),
+    "sunset": ((255, 242, 232), (238, 96, 63), "vertical"),
+    "berry": ((255, 243, 248), (191, 66, 126), "vertical"),
+    "royal": ((241, 236, 255), (95, 71, 196), "vertical"),
+    "apple_pink": ((255, 255, 255), (245, 211, 225), "vertical"),
+    "apple_peach": ((255, 255, 255), (249, 215, 187), "vertical"),
+    "apple_sky": ((255, 255, 255), (199, 221, 248), "vertical"),
+    "apple_mint": ((255, 255, 255), (198, 234, 221), "vertical"),
+    "apple_lilac": ((255, 255, 255), (218, 209, 242), "vertical"),
+    "apple_blue": ((252, 253, 255), (171, 196, 232), "vertical"),
+}
 
 
 @dataclass(slots=True)
@@ -34,6 +74,8 @@ class PresentationSettings:
     layout: PresentationLayout = "fit"
     style: PresentationStyle = "color"
     overlay_color: tuple[int, int, int] = _DEFAULT_BACKGROUND_COLOR
+    color_mode: PresentationColorMode = _DEFAULT_COLOR_MODE
+    gradient_preset: PresentationGradientPreset = "apple_sky"
     background_image_path: str | None = None
 
 
@@ -58,7 +100,7 @@ def compute_presentation_geometry(
         return PresentationGeometry((canvas_width, canvas_height), (_FIT_PADDING, _FIT_PADDING))
 
     ratio = _LAYOUT_RATIOS[settings.layout]
-    frame = max(56, round(min(width, height) * 0.09))
+    frame = max(_MIN_FRAME, round(min(width, height) * _FRAME_RATIO))
 
     min_width = width + frame * 2
     min_height = height + frame * 2
@@ -78,28 +120,23 @@ def compute_presentation_geometry(
 def render_background(
     background_source: Image.Image,
     canvas_size: tuple[int, int],
-    style: PresentationStyle,
-    overlay_color: tuple[int, int, int] | None = None,
-    background_image_path: str | None = None,
+    settings: PresentationSettings,
 ) -> Image.Image:
     """Build the blurred presentation background for preview/export."""
     if background_source.mode not in {"RGB", "RGBA"}:
         background_source = background_source.convert("RGBA")
 
-    if style == "color":
-        return Image.new("RGB", canvas_size, overlay_color or _DEFAULT_BACKGROUND_COLOR)
+    if settings.style == "color":
+        if settings.color_mode == "gradient":
+            return render_gradient_background(canvas_size, settings.gradient_preset)
+        return Image.new("RGB", canvas_size, settings.overlay_color or _DEFAULT_BACKGROUND_COLOR)
 
-    fitted = _build_custom_background(canvas_size, background_image_path) if style == "custom" else None
+    fitted = _build_custom_background(canvas_size, settings.background_image_path) if settings.style == "custom" else None
     if fitted is None:
-        fitted = _build_asset_background(canvas_size, style)
+        fitted = _build_asset_background(canvas_size, settings.style)
     if fitted is None:
         rgb_source = _flatten_source(background_source)
-        fitted = ImageOps.fit(
-            rgb_source,
-            canvas_size,
-            method=Image.Resampling.LANCZOS,
-            centering=(0.5, 0.5),
-        )
+        fitted = _build_zoomed_background(rgb_source, canvas_size)
 
     blur_radius = max(6, round(min(canvas_size) * 0.01))
     blurred = fitted.filter(ImageFilter.GaussianBlur(radius=blur_radius))
@@ -123,9 +160,7 @@ def compose_presentation(
     background = render_background(
         background_source,
         geometry.canvas_size,
-        settings.style,
-        settings.overlay_color,
-        settings.background_image_path,
+        settings,
     ).convert("RGBA")
 
     shadow = _render_shadow(subject.getchannel("A"), geometry.canvas_size, geometry.subject_pos)
@@ -187,12 +222,7 @@ def _build_asset_background(
     if len(assets) <= index:
         index = 0
 
-    return ImageOps.fit(
-        assets[index],
-        canvas_size,
-        method=Image.Resampling.LANCZOS,
-        centering=(0.5, 0.5),
-    )
+    return _build_zoomed_background(assets[index], canvas_size)
 
 
 def _build_custom_background(
@@ -206,11 +236,76 @@ def _build_custom_background(
     if custom is None:
         return None
 
-    return ImageOps.fit(
-        custom,
+    return _build_zoomed_background(custom, canvas_size)
+
+
+def _build_zoomed_background(
+    image: Image.Image,
+    canvas_size: tuple[int, int],
+) -> Image.Image:
+    base = ImageOps.fit(
+        image,
         canvas_size,
         method=Image.Resampling.LANCZOS,
         centering=(0.5, 0.5),
+    )
+    scaled_size = (
+        max(1, round(canvas_size[0] * _BACKGROUND_IMAGE_SCALE)),
+        max(1, round(canvas_size[1] * _BACKGROUND_IMAGE_SCALE)),
+    )
+    contained = ImageOps.contain(
+        image,
+        scaled_size,
+        method=Image.Resampling.LANCZOS,
+    )
+    offset = (
+        (canvas_size[0] - contained.width) // 2,
+        (canvas_size[1] - contained.height) // 2,
+    )
+    base.paste(contained, offset)
+    return base
+
+
+def render_gradient_background(
+    canvas_size: tuple[int, int],
+    preset: PresentationGradientPreset,
+) -> Image.Image:
+    start_color, end_color, direction = _GRADIENT_PRESETS.get(
+        preset,
+        _GRADIENT_PRESETS[_DEFAULT_GRADIENT_PRESET],
+    )
+    width, height = canvas_size
+    gradient = Image.new("RGB", canvas_size)
+    pixels = gradient.load()
+    max_x = max(1, width - 1)
+    max_y = max(1, height - 1)
+
+    for y in range(height):
+        y_ratio = y / max_y
+        for x in range(width):
+            x_ratio = x / max_x
+            if direction == "horizontal":
+                mix = x_ratio
+            elif direction == "diag_up":
+                mix = (x_ratio + (1.0 - y_ratio)) * 0.5
+            elif direction == "diag_down":
+                mix = (x_ratio + y_ratio) * 0.5
+            else:
+                mix = y_ratio
+            pixels[x, y] = _blend_rgb(start_color, end_color, mix)
+
+    return gradient
+
+
+def _blend_rgb(
+    start_color: tuple[int, int, int],
+    end_color: tuple[int, int, int],
+    mix: float,
+) -> tuple[int, int, int]:
+    ratio = max(0.0, min(1.0, mix))
+    return tuple(
+        round(start + (end - start) * ratio)
+        for start, end in zip(start_color, end_color)
     )
 
 

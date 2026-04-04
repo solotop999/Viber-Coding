@@ -26,6 +26,8 @@ from core.clipboard import copy_to_clipboard
 from core.settings import (
     is_local_background_image_path,
     load_presentation_background_color,
+    load_presentation_background_color_mode,
+    load_presentation_background_gradient_preset,
     load_presentation_background_image,
     load_presentation_background_style,
 )
@@ -66,6 +68,8 @@ class EditorWindow(QWidget):
         self.setMinimumSize(700, 500)
 
         self._presentation_color = load_presentation_background_color()
+        self._presentation_color_mode = load_presentation_background_color_mode()
+        self._presentation_gradient_preset = load_presentation_background_gradient_preset()
         self._presentation_style = load_presentation_background_style()
         self._presentation_background_image = load_presentation_background_image()
         if self._presentation_background_image and (
@@ -84,6 +88,8 @@ class EditorWindow(QWidget):
                 layout="fit",
                 style=self._presentation_style,
                 overlay_color=self._presentation_color,
+                color_mode=self._presentation_color_mode,
+                gradient_preset=self._presentation_gradient_preset,
                 background_image_path=self._presentation_background_image,
             ),
         )
@@ -91,6 +97,8 @@ class EditorWindow(QWidget):
             self._canvas,
             self,
             self._presentation_color,
+            self._presentation_color_mode,
+            self._presentation_gradient_preset,
             self._presentation_style,
             self._presentation_background_image,
         )
@@ -327,6 +335,16 @@ class EditorWindow(QWidget):
         self._canvas.commit_active_tool()
         self._presentation_color = color
         self._presentation_view.set_overlay_color(color)
+
+    def set_presentation_color_mode(self, mode: str) -> None:
+        self._canvas.commit_active_tool()
+        self._presentation_color_mode = mode
+        self._presentation_view.set_color_mode(mode)
+
+    def set_presentation_gradient_preset(self, preset: str) -> None:
+        self._canvas.commit_active_tool()
+        self._presentation_gradient_preset = preset
+        self._presentation_view.set_gradient_preset(preset)
 
     def set_presentation_style(self, style: str) -> None:
         self._canvas.commit_active_tool()

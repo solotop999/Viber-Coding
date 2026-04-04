@@ -46,7 +46,7 @@ Output: `dist/capture.exe`
 ## Prebuilt release
 
 - Ready-to-use file: `Solotop Capture.exe`
-- MD5: `DD50AC26D809A9AF59158398D2DB19FF`
+- MD5: `49596B9C8540041429FCD4EF0A8005A0`
 
 ## Supported platforms
 

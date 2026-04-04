@@ -26,6 +26,8 @@ from core.paths import asset_path
 from core.settings import (
     is_local_background_image_path,
     save_presentation_background_color,
+    save_presentation_background_color_mode,
+    save_presentation_background_gradient_preset,
     save_presentation_background_image,
     save_presentation_background_style,
 )
@@ -51,6 +53,40 @@ _BTN_H = 56
 _CHIP_SZ = 16
 _CHIP_ICON_SZ = 20
 _X_PROFILE_URL = "https://x.com/solotop999"
+_GRADIENT_PRESET_ITEMS = [
+    ("apple_pink", "Apple Pink"),
+    ("apple_peach", "Apple Peach"),
+    ("apple_sky", "Apple Sky"),
+    ("apple_mint", "Apple Mint"),
+    ("apple_lilac", "Apple Lilac"),
+    ("apple_blue", "Apple Blue"),
+    ("rose", "Rose"),
+    ("lemon", "Lemon"),
+    ("sunset", "Sunset"),
+    ("berry", "Berry"),
+    ("royal", "Royal"),
+    ("peach", "Peach"),
+    ("mint", "Mint"),
+    ("dusk", "Dusk"),
+    ("ocean", "Ocean"),
+]
+_GRADIENT_PRESET_STYLES = {
+    "apple_pink": ("Apple Pink", "#FFFFFF", "#F5D3E1", "#5F4661"),
+    "apple_peach": ("Apple Peach", "#FFFFFF", "#F9D7BB", "#6C523B"),
+    "apple_sky": ("Apple Sky", "#FFFFFF", "#C7DDF8", "#425A79"),
+    "apple_mint": ("Apple Mint", "#FFFFFF", "#C6EADD", "#355A52"),
+    "apple_lilac": ("Apple Lilac", "#FFFFFF", "#DAD1F2", "#554B74"),
+    "apple_blue": ("Apple Blue", "#FCFDFF", "#ABC4E8", "#3E5472"),
+    "rose": ("Rose", "#FFFAFC", "#ECA6C4", "#6A3750"),
+    "lemon": ("Lemon", "#FFFFFF", "#F7DD7D", "#6A560C"),
+    "sunset": ("Sunset", "#FFF2E8", "#EE603F", "#FFFFFF"),
+    "berry": ("Berry", "#FFF3F8", "#BF427E", "#FFFFFF"),
+    "royal": ("Royal", "#F1ECFF", "#5F47C4", "#FFFFFF"),
+    "peach": ("Peach", "#FFF5E8", "#F8BE9B", "#7C4A31"),
+    "mint": ("Mint", "#ECFFF7", "#76D5B9", "#21594B"),
+    "dusk": ("Dusk", "#F0E8FF", "#958AE1", "#433B73"),
+    "ocean": ("Ocean", "#E8F5FF", "#4D8EDB", "#FFFFFF"),
+}
 
 
 @lru_cache(maxsize=None)
@@ -376,6 +412,8 @@ class Toolbar(QWidget):
         canvas: AnnotationCanvas,
         editor,
         presentation_color: tuple[int, int, int],
+        presentation_color_mode: str,
+        presentation_gradient_preset: str,
         presentation_style: str,
         background_image_path: str | None,
     ) -> None:
@@ -384,6 +422,14 @@ class Toolbar(QWidget):
         self._editor = editor
         self._color = QColor("#19C85B")
         self._background_color = QColor(*presentation_color)
+        self._background_color_mode = (
+            presentation_color_mode if presentation_color_mode in {"solid", "gradient"} else "solid"
+        )
+        self._background_gradient_preset = (
+            presentation_gradient_preset
+            if presentation_gradient_preset in dict(_GRADIENT_PRESET_ITEMS)
+            else "apple_sky"
+        )
         self._background_style = (
             presentation_style
             if presentation_style in {"color", "image1", "image2", "image3", "custom"}
@@ -803,6 +849,34 @@ class Toolbar(QWidget):
             """)
             return
 
+        if self._background_color_mode == "gradient":
+            preset_label, start_color, end_color, text_color = _GRADIENT_PRESET_STYLES.get(
+                self._background_gradient_preset,
+                _GRADIENT_PRESET_STYLES["apple_sky"],
+            )
+            self._bg_color_btn.setText("Grad")
+            self._bg_color_btn.setToolTip(f"Gradient: {preset_label}")
+            self._bg_color_btn.setStyleSheet(f"""
+                QToolButton {{
+                    background: qlineargradient(
+                        x1: 0, y1: 0, x2: 1, y2: 1,
+                        stop: 0 {start_color},
+                        stop: 1 {end_color}
+                    );
+                    border: 1px solid #7A8EA6;
+                    border-radius: 5px;
+                    color: {text_color};
+                    padding: 0 10px;
+                }}
+                QToolButton:hover {{
+                    border-color: #4D6F95;
+                }}
+                QToolButton:pressed {{
+                    background: {end_color};
+                }}
+            """)
+            return
+
         self._bg_color_btn.setText("Color")
         self._bg_color_btn.setToolTip("Choose background source")
         text_color = "#FFFFFF" if self._background_color.lightness() < 140 else "#1A1A1A"
@@ -839,19 +913,37 @@ class Toolbar(QWidget):
             }
         """)
 
-        color_action = menu.addAction("Color...")
+        solid_color_action = menu.addAction("Solid Color...")
+        gradient_menu = menu.addMenu("Gradient")
+        gradient_actions = {
+            gradient_menu.addAction(label): preset
+            for preset, label in _GRADIENT_PRESET_ITEMS
+        }
         bg1_action = menu.addAction("BG 1")
         bg2_action = menu.addAction("BG 2")
         bg3_action = menu.addAction("BG 3")
         custom_action = menu.addAction("Custom")
         selected = menu.exec(self._bg_color_btn.mapToGlobal(self._bg_color_btn.rect().bottomLeft()))
-        if selected is color_action:
+        if selected is solid_color_action:
             self._background_style = "color"
+            self._background_color_mode = "solid"
             self._editor.set_presentation_style("color")
+            self._editor.set_presentation_color_mode("solid")
             save_presentation_background_style("color")
+            save_presentation_background_color_mode("solid")
             if not self._pick_background_color():
                 self._sync_background_button()
                 return
+        elif selected in gradient_actions:
+            self._background_style = "color"
+            self._background_color_mode = "gradient"
+            self._background_gradient_preset = gradient_actions[selected]
+            self._editor.set_presentation_style("color")
+            self._editor.set_presentation_color_mode("gradient")
+            self._editor.set_presentation_gradient_preset(self._background_gradient_preset)
+            save_presentation_background_style("color")
+            save_presentation_background_color_mode("gradient")
+            save_presentation_background_gradient_preset(self._background_gradient_preset)
         elif selected is bg1_action:
             self._background_style = "image1"
             self._editor.set_presentation_style("image1")

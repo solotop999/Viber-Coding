@@ -41,6 +41,8 @@ class PresentationView(QWidget):
             layout=self._settings.layout,
             style=self._settings.style,
             overlay_color=self._settings.overlay_color,
+            color_mode=self._settings.color_mode,
+            gradient_preset=self._settings.gradient_preset,
             background_image_path=self._settings.background_image_path,
         )
 
@@ -71,6 +73,18 @@ class PresentationView(QWidget):
         self._settings.style = style  # type: ignore[assignment]
         self._refresh_view()
 
+    def set_color_mode(self, mode: str) -> None:
+        if self._settings.color_mode == mode:
+            return
+        self._settings.color_mode = mode  # type: ignore[assignment]
+        self._refresh_view()
+
+    def set_gradient_preset(self, preset: str) -> None:
+        if self._settings.gradient_preset == preset:
+            return
+        self._settings.gradient_preset = preset  # type: ignore[assignment]
+        self._refresh_view()
+
     def set_background_image_path(self, path: str | None) -> None:
         if self._settings.background_image_path == path:
             return
@@ -86,6 +100,8 @@ class PresentationView(QWidget):
             layout=settings.layout,
             style=settings.style,
             overlay_color=settings.overlay_color,
+            color_mode=settings.color_mode,
+            gradient_preset=settings.gradient_preset,
             background_image_path=settings.background_image_path,
         )
         self._refresh_view()
@@ -132,9 +148,7 @@ class PresentationView(QWidget):
         bg = render_background(
             self._canvas.base_image(),
             preview_size,
-            self._settings.style,
-            self._settings.overlay_color,
-            self._settings.background_image_path,
+            self._settings,
         )
         if preview_size != self._geometry.canvas_size:
             bg = bg.resize(self._geometry.canvas_size, Image.Resampling.LANCZOS)

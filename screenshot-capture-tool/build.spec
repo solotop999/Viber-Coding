@@ -37,7 +37,6 @@ a = Analysis(
         'PyQt6.QtLocation',
         'PyQt6.QtPositioning',
         'PyQt6.QtRemoteObjects',
-        'urllib',
         'urllib3',
         'http',
         'http.client',
