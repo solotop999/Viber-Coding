@@ -1,11 +1,31 @@
 import { Calendar, Flame, Clock } from "lucide-react";
 import { history, last30Days } from "../data/mock";
+import { getRecentHistory, getWeeklyHistorySummary } from "../features/pushup-detection";
 import { useI18n } from "../i18n";
 
 export default function History() {
   const { copy } = useI18n();
-  const total = history.reduce((a, b) => a + b.reps, 0);
-  const avg = Math.round(total / history.length);
+  const summary = getWeeklyHistorySummary();
+  const recentHistory = getRecentHistory();
+  const total = summary.total || history.reduce((a, b) => a + b.reps, 0);
+  const avg = summary.average || Math.round(total / history.length);
+  const chart = summary.chart.some((value) => value > 0) ? summary.chart : last30Days.slice(-7);
+  const items =
+    recentHistory.length > 0
+      ? recentHistory.map((session) => ({
+          id: session.id,
+          monthLabel: session.monthLabel,
+          dayLabel: session.dayLabel,
+          reps: session.repCount,
+          minutes: session.minutesLabel,
+        }))
+      : history.map((item) => ({
+          id: item.date,
+          monthLabel: item.date.split(" ")[0],
+          dayLabel: item.date.split(" ")[1],
+          reps: item.reps,
+          minutes: item.minutes.toString(),
+        }));
 
   return (
     <div className="flex flex-col">
@@ -31,8 +51,8 @@ export default function History() {
           </div>
         </div>
         <div className="mt-3 flex items-end gap-[3px] h-[36px]">
-          {last30Days.slice(-7).map((v, i) => {
-            const max = Math.max(...last30Days.slice(-7));
+          {chart.map((v, i) => {
+            const max = Math.max(...chart, 1);
             return (
               <div
                 key={i}
@@ -52,24 +72,24 @@ export default function History() {
           {copy.history.recentSessions}
         </div>
         <div className="flex flex-col gap-2">
-          {history.map((h) => (
+          {items.map((h) => (
             <div
-              key={h.date}
+              key={h.id}
               className="rounded-2xl bg-surface border border-border/60 px-3 py-2.5 flex items-center gap-3"
             >
               <div className="w-10 h-10 rounded-xl bg-primary/15 flex flex-col items-center justify-center">
                 <span className="text-[9px] text-muted font-semibold leading-none">
-                  {h.date.split(" ")[0]}
+                  {h.monthLabel}
                 </span>
                 <span className="text-[14px] font-extrabold text-primary leading-none mt-0.5">
-                  {h.date.split(" ")[1]}
+                  {h.dayLabel}
                 </span>
               </div>
               <div className="flex-1">
                 <div className="font-bold text-[14px]">{h.reps} {copy.history.pushups}</div>
                 <div className="flex items-center gap-2 text-[10px] text-muted mt-0.5">
                   <span className="flex items-center gap-0.5">
-                    <Flame size={10} /> {h.kcal} kcal
+                    <Flame size={10} /> -- kcal
                   </span>
                   <span className="flex items-center gap-0.5">
                     <Clock size={10} /> {h.minutes}m
