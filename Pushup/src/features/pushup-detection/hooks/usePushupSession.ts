@@ -30,8 +30,11 @@ const initialFrame: DetectorFrameState = {
   downThreshold: null,
   message: "Chuan bi",
   debug: {
+    active: false,
     rawHeadHeight: null,
     smoothedHeadHeight: null,
+    rawMotionSignal: null,
+    smoothedMotionSignal: null,
     rawElbowAngle: null,
     smoothedElbowAngle: null,
     transitionFrom: "unknown",
@@ -41,8 +44,9 @@ const initialFrame: DetectorFrameState = {
     elapsedMsSinceLastRep: null,
     minRepDurationMs: null,
     maxRepDurationMs: null,
-    calibrationMinAngle: null,
-    calibrationAcceptedFrame: false,
+    activationRange: null,
+    oscillationRange: 0,
+    bufferFill: 0,
     repBlockReason: "none",
   },
 };

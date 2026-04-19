@@ -83,6 +83,11 @@ export function getPoseMetrics(landmarks: NormalizedLandmark[]): PoseMetrics {
     headHeight = midHipY - midShoulderY;
   }
 
+  const shoulderWidth =
+    leftShoulder && rightShoulder && shoulderConfidence > 0.4
+      ? distance(leftShoulder, rightShoulder)
+      : null;
+
   let elbowAngle: number | null = null;
   if (leftShoulder && leftElbow && leftWrist && rightShoulder && rightElbow && rightWrist) {
     const leftAngle = angleAt(leftElbow, leftShoulder, leftWrist);
@@ -94,6 +99,7 @@ export function getPoseMetrics(landmarks: NormalizedLandmark[]): PoseMetrics {
 
   return {
     headHeight,
+    shoulderWidth,
     elbowAngle,
     shoulderConfidence,
     elbowConfidence,

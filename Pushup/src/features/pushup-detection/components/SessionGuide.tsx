@@ -8,16 +8,14 @@ type SessionGuideProps = {
   confidence: number;
 };
 
-function statusLabel(status: DetectorStatus) {
+function statusLabel(status: DetectorStatus, phase: DetectorPhase) {
   switch (status) {
     case "requesting_camera":
       return "CHUẨN BỊ CAMERA";
     case "countdown":
-      return "SẴN SÀNG VÀO BÀI";
-    case "calibrating":
-      return "ĐANG HIỆU CHỈNH";
+      return "SẮP BẮT ĐẦU";
     case "tracking":
-      return "ĐANG THEO DÕI";
+      return phase === "unknown" ? "SẴN SÀNG" : "ĐANG THEO DÕI";
     case "paused":
       return "ĐÃ TẠM DỪNG";
     case "error":
@@ -30,32 +28,32 @@ function statusLabel(status: DetectorStatus) {
 }
 
 function nextAction(status: DetectorStatus, phase: DetectorPhase, fallback: string) {
-  if (status === "tracking") {
+  if (status === "tracking" && phase !== "unknown") {
     switch (phase) {
       case "up":
       case "going_down":
-        return "Hạ người chậm và sâu hơn";
+        return "Hạ người xuống chậm và sâu hơn";
       case "down":
       case "going_up":
         return "Đẩy mạnh người lên về đỉnh";
       default:
-        return "Giữ nhịp ổn định để app bắt đúng chuyển động";
+        return fallback;
     }
   }
 
   return fallback;
 }
 
-function helperText(status: DetectorStatus) {
+function helperText(status: DetectorStatus, phase: DetectorPhase) {
   switch (status) {
     case "requesting_camera":
       return "Cho phép truy cập camera và đặt điện thoại cố định trước khi bắt đầu.";
     case "countdown":
-      return "Vào tư thế chống đẩy ban đầu, giữ người ổn định và chờ lệnh bắt đầu.";
-    case "calibrating":
-      return "Giữ nguyên tư thế bắt đầu để app lấy mốc chiều cao chính xác.";
+      return "Vào tư thế chống đẩy ban đầu và chờ đếm ngược kết thúc.";
     case "tracking":
-      return "Thực hiện trọn một nhịp xuống và lên để được tính rep.";
+      return phase === "unknown"
+        ? "Ứng dụng đang đợi bạn bắt đầu nhịp đầu tiên."
+        : "Thực hiện trọn một nhịp xuống và lên để được tính rep.";
     case "paused":
       return "Quay lại ứng dụng để tiếp tục buổi tập.";
     case "error":
@@ -63,7 +61,7 @@ function helperText(status: DetectorStatus) {
     case "finished":
       return "Buổi tập đã kết thúc. Bạn có thể quay lại để xem lịch sử.";
     default:
-      return "Đưa cơ thể vào khung hình và chờ ứng dụng sẵn sàng.";
+      return "Đưa cơ thể vào khung hình và bắt đầu hít đất.";
   }
 }
 
@@ -85,12 +83,12 @@ export default function SessionGuide({
   return (
     <div className="w-full max-w-[360px] text-center text-white [text-shadow:0_2px_18px_rgba(0,0,0,0.75)]">
       <div className="text-[11px] font-semibold uppercase tracking-[0.28em] text-white/70">
-        {statusLabel(status)}
+        {statusLabel(status, phase)}
       </div>
       <div className="mt-2 text-[24px] font-black tracking-[-0.03em] text-white">
         {nextAction(status, phase, message)}
       </div>
-      <div className="mt-2 text-[13px] leading-5 text-white/82">{helperText(status)}</div>
+      <div className="mt-2 text-[13px] leading-5 text-white/82">{helperText(status, phase)}</div>
 
       <div className="mx-auto mt-4 w-full max-w-[300px]">
         <div className="h-[6px] overflow-hidden rounded-full bg-white/16">

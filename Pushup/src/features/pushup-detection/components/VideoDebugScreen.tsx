@@ -26,8 +26,11 @@ const initialFrame: DetectorFrameState = {
   downThreshold: null,
   message: "Chọn video để debug",
   debug: {
+    active: false,
     rawHeadHeight: null,
     smoothedHeadHeight: null,
+    rawMotionSignal: null,
+    smoothedMotionSignal: null,
     rawElbowAngle: null,
     smoothedElbowAngle: null,
     transitionFrom: "unknown",
@@ -37,8 +40,9 @@ const initialFrame: DetectorFrameState = {
     elapsedMsSinceLastRep: null,
     minRepDurationMs: null,
     maxRepDurationMs: null,
-    calibrationMinAngle: null,
-    calibrationAcceptedFrame: false,
+    activationRange: null,
+    oscillationRange: 0,
+    bufferFill: 0,
     repBlockReason: "none",
   },
 };
@@ -74,9 +78,7 @@ export default function VideoDebugScreen({ onClose }: VideoDebugScreenProps) {
         }
 
         poseLandmarkerRef.current = poseLandmarker;
-        detectorRef.current = new PushupDetector(navigator.userAgent, {
-          flexibleCalibration: true,
-        });
+        detectorRef.current = new PushupDetector(navigator.userAgent);
       } catch {
         if (cancelled) {
           return;
@@ -191,7 +193,7 @@ export default function VideoDebugScreen({ onClose }: VideoDebugScreenProps) {
   }
 
   function handlePlay() {
-    setStatus((current) => (current === "idle" ? "calibrating" : current));
+    setStatus((current) => (current === "idle" ? "tracking" : current));
     setError(null);
   }
 

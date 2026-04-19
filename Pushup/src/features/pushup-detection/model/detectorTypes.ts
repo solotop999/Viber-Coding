@@ -16,15 +16,18 @@ export type DetectorRepBlockReason =
   | "none"
   | "missing_landmarks"
   | "low_confidence"
-  | "calibrating"
+  | "waiting_for_activation"
   | "duration_too_short"
   | "duration_too_long"
   | "waiting_for_bottom"
   | "waiting_for_full_extension";
 
 export type DetectorDebugState = {
+  active: boolean;
   rawHeadHeight: number | null;
   smoothedHeadHeight: number | null;
+  rawMotionSignal: number | null;
+  smoothedMotionSignal: number | null;
   rawElbowAngle: number | null;
   smoothedElbowAngle: number | null;
   transitionFrom: DetectorPhase;
@@ -34,8 +37,9 @@ export type DetectorDebugState = {
   elapsedMsSinceLastRep: number | null;
   minRepDurationMs: number | null;
   maxRepDurationMs: number | null;
-  calibrationMinAngle: number | null;
-  calibrationAcceptedFrame: boolean;
+  activationRange: number | null;
+  oscillationRange: number;
+  bufferFill: number;
   repBlockReason: DetectorRepBlockReason;
 };
 
@@ -60,6 +64,7 @@ export type DetectorSnapshot = {
 
 export type PoseMetrics = {
   headHeight: number | null;
+  shoulderWidth: number | null;
   elbowAngle: number | null;
   shoulderConfidence: number;
   elbowConfidence: number;
