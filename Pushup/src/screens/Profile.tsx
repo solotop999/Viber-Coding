@@ -1,12 +1,15 @@
 import { Settings, Award, Target, Zap, ChevronRight } from "lucide-react";
 import { user, achievements, todayStats } from "../data/mock";
+import { useI18n } from "../i18n";
 
 export default function Profile() {
+  const { copy } = useI18n();
   const xpPct = (user.xp / user.xpToNext) * 100;
+
   return (
     <div className="flex flex-col">
       <div className="px-5 pt-2 pb-3 flex items-center justify-between">
-        <h1 className="text-[20px] font-extrabold">Profile</h1>
+        <h1 className="text-[20px] font-extrabold">{copy.profile.title}</h1>
         <button className="w-9 h-9 rounded-full bg-surface border border-border flex items-center justify-center">
           <Settings size={15} />
         </button>
@@ -19,10 +22,10 @@ export default function Profile() {
         </div>
         <div className="flex-1 min-w-0 relative">
           <div className="font-extrabold text-[15px]">{user.name}</div>
-          <div className="text-[11px] text-muted">{user.handle} · Joined {user.joined}</div>
+          <div className="text-[11px] text-muted">{user.handle} · {copy.profile.joined} {user.joined}</div>
         </div>
         <div className="text-right relative">
-          <div className="text-[10px] text-muted font-semibold">LEVEL</div>
+          <div className="text-[10px] text-muted font-semibold">{copy.profile.level}</div>
           <div className="text-[22px] font-extrabold text-primary leading-none">
             {user.level}
           </div>
@@ -31,7 +34,7 @@ export default function Profile() {
 
       <div className="mx-4 mt-3 rounded-2xl bg-surface border border-border/60 p-3">
         <div className="flex items-center justify-between">
-          <span className="text-[11px] text-muted font-semibold">XP Progress</span>
+          <span className="text-[11px] text-muted font-semibold">{copy.profile.xpProgress}</span>
           <span className="text-[11px] font-bold">
             {user.xp}<span className="text-muted">/{user.xpToNext}</span>
           </span>
@@ -45,14 +48,18 @@ export default function Profile() {
       </div>
 
       <div className="grid grid-cols-3 gap-2 px-4 mt-3">
-        <StatBox icon={Target} label="Goal" value={`${todayStats.goal}`} />
-        <StatBox icon={Zap} label="Streak" value={`${todayStats.streak}d`} />
-        <StatBox icon={Award} label="Badges" value={`${achievements.filter((a) => a.unlocked).length}`} />
+        <StatBox icon={Target} label={copy.profile.goal} value={`${todayStats.goal}`} />
+        <StatBox icon={Zap} label={copy.profile.streak} value={`${todayStats.streak}d`} />
+        <StatBox
+          icon={Award}
+          label={copy.profile.badges}
+          value={`${achievements.filter((a) => a.unlocked).length}`}
+        />
       </div>
 
       <div className="px-4 mt-3">
         <div className="text-[10px] tracking-[0.2em] text-muted font-semibold mb-2">
-          ACHIEVEMENTS
+          {copy.profile.achievements}
         </div>
         <div className="flex flex-col gap-2">
           {achievements.map((a) => (
@@ -70,8 +77,8 @@ export default function Profile() {
                 <Award size={16} className={a.unlocked ? "text-primary" : "text-muted"} />
               </div>
               <div className="flex-1 min-w-0">
-                <div className="font-bold text-[13px]">{a.title}</div>
-                <div className="text-[10px] text-muted">{a.desc}</div>
+                <div className="font-bold text-[13px]">{copy.profile.achievementTitles[a.title] ?? a.title}</div>
+                <div className="text-[10px] text-muted">{copy.profile.achievementDescs[a.desc] ?? a.desc}</div>
               </div>
               <ChevronRight size={14} className="text-muted" />
             </div>

@@ -1,6 +1,10 @@
+import { Flame } from "lucide-react";
+import { useI18n } from "../i18n";
+
 type Props = { value: number; goal: number };
 
 export default function PushupRing({ value, goal }: Props) {
+  const { copy } = useI18n();
   const pct = Math.min(1, value / goal);
 
   // Geometry
@@ -15,6 +19,13 @@ export default function PushupRing({ value, goal }: Props) {
   // Bottom of arc after 135° rotation sits at ~85% of size.
   // Crop viewBox to remove unused empty space below.
   const visibleH = Math.round(size * 0.86);
+
+  // End-of-arc position (for flame icon at the tip of the progress)
+  // Arc starts at 3 o'clock (0°) then rotated 135° CW. End = 135 + pct*270.
+  const endDeg = 135 + pct * 270;
+  const endRad = (endDeg * Math.PI) / 180;
+  const endX = size / 2 + r * Math.cos(endRad);
+  const endY = size / 2 + r * Math.sin(endRad);
 
   return (
     <div className="relative mx-4 rounded-3xl bg-surface border border-border/60 overflow-hidden py-4">
@@ -54,9 +65,30 @@ export default function PushupRing({ value, goal }: Props) {
           </g>
         </svg>
 
+        {/* Flame icon riding on the tip of the progress arc */}
+        <div
+          className="absolute pointer-events-none"
+          style={{
+            left: endX,
+            top: endY,
+            transform: "translate(-50%, -50%)",
+          }}
+        >
+          <div
+            className="rounded-full bg-[#FF6A1A] flex items-center justify-center"
+            style={{
+              width: 22,
+              height: 22,
+              boxShadow: "0 0 10px rgba(255,106,26,0.6)",
+            }}
+          >
+            <Flame size={13} color="#fff" fill="#fff" strokeWidth={2} />
+          </div>
+        </div>
+
         <div className="absolute inset-x-0 bottom-0 flex flex-col items-center">
           <span className="text-[10px] tracking-[0.22em] font-semibold text-text">
-            PUSHUPS&nbsp;TODAY
+            {copy.dashboard.pushupsToday}
           </span>
           <span
             className="font-bold text-text mt-1"
@@ -65,7 +97,7 @@ export default function PushupRing({ value, goal }: Props) {
             {value}
           </span>
           <span className="text-[10px] tracking-[0.32em] font-semibold text-text mt-1">
-            TOTAL
+            {copy.dashboard.total}
           </span>
         </div>
       </div>

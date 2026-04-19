@@ -1,6 +1,9 @@
-import { User, Flame } from "lucide-react";
+import { Flame } from "lucide-react";
+import { useI18n } from "../i18n";
 
 export default function TopBar() {
+  const { lang, setLang, copy } = useI18n();
+
   return (
     <div className="flex items-center justify-between px-5 pt-2 pb-3">
       <div className="flex items-center gap-1.5">
@@ -19,8 +22,15 @@ export default function TopBar() {
           <span style={{ color: "#F5F5F5", marginLeft: 4 }}>UP</span>
         </span>
       </div>
-      <button className="w-9 h-9 rounded-full bg-surface border border-border flex items-center justify-center">
-        <User size={16} className="text-text" />
+      <button
+        onClick={() => setLang((current) => (current === "vi" ? "en" : "vi"))}
+        className="w-9 h-9 rounded-full bg-surface border border-border flex items-center justify-center"
+        aria-label={copy.topBar.languageLabel}
+        title={copy.topBar.languageLabel}
+      >
+        <span className="text-[11px] font-bold text-white leading-none">
+          {lang === "vi" ? copy.topBar.vi : copy.topBar.en}
+        </span>
       </button>
     </div>
   );

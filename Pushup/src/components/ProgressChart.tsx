@@ -1,18 +1,20 @@
 import { ChevronRight } from "lucide-react";
+import { useI18n } from "../i18n";
 
 type Props = { data: number[] };
 
 export default function ProgressChart({ data }: Props) {
+  const { copy } = useI18n();
   const max = Math.max(...data);
   const highlight = data.indexOf(max);
   return (
     <div className="mx-4 mt-3 rounded-2xl bg-surface border border-border/60 px-4 pt-3 pb-3">
       <div className="flex items-center justify-between">
-        <span className="text-[11px] tracking-[0.18em] text-muted font-semibold">
-          30-DAY PROGRESS
+        <span className="text-[13px] tracking-[0.08em] text-white font-bold">
+          {copy.dashboard.progress30Day}
         </span>
         <button className="flex items-center gap-0.5 text-[11px] text-primary font-semibold">
-          Bar Chart <ChevronRight size={12} />
+          {copy.dashboard.barChart} <ChevronRight size={12} />
         </button>
       </div>
       <div className="mt-3 flex items-end gap-[3px] h-[56px]">

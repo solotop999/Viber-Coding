@@ -1,13 +1,16 @@
 import { Calendar, Flame, Clock } from "lucide-react";
 import { history, last30Days } from "../data/mock";
+import { useI18n } from "../i18n";
 
 export default function History() {
+  const { copy } = useI18n();
   const total = history.reduce((a, b) => a + b.reps, 0);
   const avg = Math.round(total / history.length);
+
   return (
     <div className="flex flex-col">
       <div className="px-5 pt-2 pb-3 flex items-center justify-between">
-        <h1 className="text-[20px] font-extrabold">History</h1>
+        <h1 className="text-[20px] font-extrabold">{copy.history.title}</h1>
         <button className="w-9 h-9 rounded-full bg-surface border border-border flex items-center justify-center">
           <Calendar size={15} />
         </button>
@@ -15,16 +18,16 @@ export default function History() {
 
       <div className="mx-4 rounded-2xl bg-surface border border-border/60 p-4">
         <div className="text-[10px] tracking-[0.2em] text-muted font-semibold">
-          THIS WEEK
+          {copy.history.thisWeek}
         </div>
         <div className="flex items-end gap-3 mt-2">
           <div>
             <div className="text-[28px] font-extrabold leading-none">{total}</div>
-            <div className="text-[10px] text-muted mt-1">Total reps</div>
+            <div className="text-[10px] text-muted mt-1">{copy.history.totalReps}</div>
           </div>
           <div className="ml-auto text-right">
             <div className="text-[14px] font-bold text-primary">{avg}/day</div>
-            <div className="text-[10px] text-muted">Average</div>
+            <div className="text-[10px] text-muted">{copy.history.average}</div>
           </div>
         </div>
         <div className="mt-3 flex items-end gap-[3px] h-[36px]">
@@ -46,7 +49,7 @@ export default function History() {
 
       <div className="px-4 mt-3">
         <div className="text-[10px] tracking-[0.2em] text-muted font-semibold mb-2">
-          RECENT SESSIONS
+          {copy.history.recentSessions}
         </div>
         <div className="flex flex-col gap-2">
           {history.map((h) => (
@@ -63,7 +66,7 @@ export default function History() {
                 </span>
               </div>
               <div className="flex-1">
-                <div className="font-bold text-[14px]">{h.reps} pushups</div>
+                <div className="font-bold text-[14px]">{h.reps} {copy.history.pushups}</div>
                 <div className="flex items-center gap-2 text-[10px] text-muted mt-0.5">
                   <span className="flex items-center gap-0.5">
                     <Flame size={10} /> {h.kcal} kcal
