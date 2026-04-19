@@ -8,7 +8,10 @@ export default function ProgressChart({ data }: Props) {
   const max = Math.max(...data);
   const highlight = data.indexOf(max);
   return (
-    <div className="mx-4 mt-3 rounded-2xl bg-surface border border-border/60 px-4 pt-3 pb-3">
+    <div
+      className="mx-4 mt-3 rounded-2xl border border-border/60 px-4 pt-3 pb-3"
+      style={{ backgroundColor: "rgba(0, 0, 0, 0.69)" }}
+    >
       <div className="flex items-center justify-between">
         <span className="text-[13px] tracking-[0.08em] text-white font-bold">
           {copy.dashboard.progress30Day}

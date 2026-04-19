@@ -51,9 +51,7 @@ button:hover {
 }
 
 .bg-surface {
-  background-color: rgba(20, 20, 20, 0.6) !important;
-  -webkit-backdrop-filter: blur(16px);
-  backdrop-filter: blur(16px);
+  background-color: #00000047 !important;
 }
 
 .no-scrollbar::-webkit-scrollbar { display: none; }
