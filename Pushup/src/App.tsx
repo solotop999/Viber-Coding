@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import PhoneFrame from "./components/PhoneFrame";
 import StatusBar from "./components/StatusBar";
 import BottomTabBar from "./components/BottomTabBar";
@@ -6,11 +6,58 @@ import Dashboard from "./screens/Dashboard";
 import Workouts from "./screens/Workouts";
 import History from "./screens/History";
 import Profile from "./screens/Profile";
-import type { TabKey } from "./types";
+import { SessionScreen, VideoDebugScreen } from "./features/pushup-detection";
+import type { AppMode, TabKey } from "./types";
 import backgroundImage from "../background.png";
 
 export default function App() {
   const [tab, setTab] = useState<TabKey>("dashboard");
+  const [mode, setMode] = useState<AppMode>(() => {
+    const { pathname } = window.location;
+
+    if (pathname === "/debug") {
+      return "video-debug";
+    }
+
+    if (pathname === "/session") {
+      return "session";
+    }
+
+    return "shell";
+  });
+
+  useEffect(() => {
+    const url = new URL(window.location.href);
+
+    if (mode === "video-debug") {
+      url.pathname = "/debug";
+      url.search = "";
+    } else if (mode === "session") {
+      url.pathname = "/session";
+      url.search = "";
+    } else {
+      url.pathname = "/";
+      url.search = "";
+    }
+
+    window.history.replaceState({}, "", url);
+  }, [mode]);
+
+  if (mode === "session") {
+    return (
+      <PhoneFrame>
+        <SessionScreen onClose={() => setMode("shell")} />
+      </PhoneFrame>
+    );
+  }
+
+  if (mode === "video-debug") {
+    return (
+      <PhoneFrame>
+        <VideoDebugScreen onClose={() => setMode("shell")} />
+      </PhoneFrame>
+    );
+  }
 
   return (
     <PhoneFrame>
@@ -24,7 +71,12 @@ export default function App() {
       >
         <StatusBar />
         <div className="flex-1 overflow-y-auto no-scrollbar pb-24">
-          {tab === "dashboard" && <Dashboard />}
+          {tab === "dashboard" && (
+            <Dashboard
+              onStartSession={() => setMode("session")}
+              onOpenVideoDebug={() => setMode("video-debug")}
+            />
+          )}
           {tab === "workouts" && <Workouts />}
           {tab === "history" && <History />}
           {tab === "profile" && <Profile />}
