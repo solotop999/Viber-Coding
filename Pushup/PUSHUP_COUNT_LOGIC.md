@@ -1,148 +1,82 @@
-# Cách Đếm Hiện Tại
+# Logic Phát Hiện Hít Đất
 
-## App đang lấy gì để đếm
+## 1. Giải nghĩa biến chính
 
-App lấy `độ cao đầu` làm chính.
+- `leftShoulderY`, `rightShoulderY`: tọa độ dọc của vai trái và vai phải.
+- `midShoulderY`: tọa độ dọc ở giữa 2 vai: `(leftShoulderY + rightShoulderY) / 2`
+- `noseY`: tọa độ dọc của mũi.
+- `headHeight`: khoảng cách dọc từ mũi tới trục giữa 2 vai: `midShoulderY - noseY`
+- `smoothedSignal`: `headHeight` sau khi làm mượt bằng EMA.
+- `upPositionThreshold`: mốc để coi là đang ở trên cao: `0.08`
+- `downPositionThreshold`: mốc để coi là đang ở dưới thấp: `0.01`
+- `positionHysteresis`: khoảng đệm chống nhảy trạng thái loạn quanh mép ngưỡng: `0.005`
+- `motionTrendThreshold`: mốc để biết đầu đang lên hay đang xuống: `0.005`
+- `shoulderConfidence`: độ tin cậy nhìn thấy rõ 2 vai.
+- `readyHoldFrames`: số frame phải giữ tư thế sẵn sàng liên tục trước khi bắt đầu đếm: `8`
 
-- nếu thấy mũi rõ:
-  - `độ cao đầu = giữa 2 vai - mũi`
-- nếu không thấy mũi:
-  - `độ cao đầu = giữa hông - giữa vai`
+## 2. Diagram dễ hiểu
 
-Hiểu đơn giản:
+```text
+          mũi
+           *
+           |  <- headHeight
+-----------+-----------  <- trục giữa 2 vai (midShoulderY)
+     vai trái     vai phải
+```
 
-- ở trên cao: số này lớn hơn
-- hạ xuống: số này nhỏ đi
+```text
+Sẵn sàng
+   |
+   v
+up -> going_down -> down -> going_up -> up (+1 rep)
+```
 
-## Góc tay dùng để làm gì
+## 3. App đang đo cái gì
 
-Góc tay chỉ là kiểm tra phụ.
+- Bắt buộc phải thấy mũi rõ: `noseConfidence > 0.4`
+- Khi thấy mũi rõ: `headHeight = midShoulderY - noseY`
+- Nếu không thấy mũi rõ: không tính `headHeight`
+- Tín hiệu được làm mượt bằng EMA: `alpha = 0.55`
+- App đọc `smoothedSignal` để quyết định đang ở trên, ở dưới, đang lên hay đang xuống
 
-- xuống đáy: góc tay < `140`
-- lên đỉnh: góc tay > `145`
+## 4. Khi nào được coi là sẵn sàng
 
-Nếu tay không thấy rõ đủ, app bỏ qua bước này.
+- Thấy rõ mặt: `noseConfidence >= 0.45`
+- Thấy rõ 2 vai: `shoulderConfidence >= 0.45`
+- Thấy rõ 2 hông: `hipConfidence >= 0.45`
+- Thấy rõ 2 khuỷu tay: `elbowJointConfidence >= 0.45`
+- Mặt nhìn gần chính diện camera: `noseOffsetFromShoulderCenterRatio <= 0.35`
+- Giữ đủ `8 frame` liên tiếp thì vào trạng thái sẵn sàng
 
-## Lấy mốc ban đầu
+## 5. Các số liệu đang dùng để đếm rep
 
-App lấy `25` khung hình khi bạn giữ tư thế chống cao.
+- Tốc độ detect: khoảng `25 fps`
+- Mốc trên để coi là ở cao: `0.08`
+- Mốc dưới để coi là ở thấp: `0.01`
+- Khoảng đệm chống nhảy loạn: `0.005`
+- Mốc nhận biết đầu đang lên hoặc đang xuống: `0.005`
+- Đổi pha chỉ khi giữ đủ điều kiện trong: `2 frame`
+- Độ tin cậy tối thiểu để tiếp tục tracking: `shoulderConfidence >= 0.30`
+- Thời gian một rep hợp lệ: `350 ms -> 12,000 ms`
 
-Sau đó tính:
+## 6. Khi nào cộng 1 rep
 
-- `mốc gốc = trung bình độ cao đầu`
+- Sau khi sẵn sàng, app theo vòng: `up -> going_down -> down -> going_up -> up`
+- Chỉ cộng `1 rep` khi vừa đi từ `going_up` quay lại `up`
+- Nếu rep quá nhanh: `< 350 ms` thì không cộng
+- Nếu rep quá lâu: `> 12,000 ms` thì không cộng
 
-## Các ngưỡng đang dùng
+## 7. Cách đọc debug nhanh
 
-- `ngưỡng lên = mốc gốc x 0.75`
-- `ngưỡng xuống = mốc gốc x 0.52`
+- `Hướng hiện tại`: đầu đang `đi lên / đi xuống / đứng yên`
+- `Mức cao/thấp hiện tại`: đầu đang ở `trên cao / ở giữa / dưới thấp`
+- `Độ cao đầu hiện tại`: chính là `smoothedSignal`
+- `Mốc trên để coi là ở cao`: ngưỡng để vào vùng trên
+- `Mốc dưới để coi là ở thấp`: ngưỡng để vào vùng dưới
+- `Trạng thái sẵn sàng`: đã qua bước kiểm tra tư thế ban đầu hay chưa
 
-## Khi nào được cộng 1 cái
+## 8. Tóm gọn
 
-Phải đi đủ vòng này:
-
-1. đang ở trên
-2. hạ xuống qua `ngưỡng lên`
-3. xuống thấp hơn `ngưỡng xuống`
-4. đi lên lại
-5. vượt lại `ngưỡng lên`
-6. nếu hợp lệ thì cộng `1`
-
-## Điều kiện chống đếm sai
-
-- nhanh hơn `500ms` thì không tính
-- lâu hơn `12s` thì không tính
-- độ tin cậy tối thiểu khoảng `0.45`
-
-## Các số quan trọng nhất trên màn debug
-
-- `Head raw`: độ cao đầu thật
-- `Head mượt`: độ cao đầu app đang dùng để quyết định
-- `Nền`: mốc gốc
-- `Ngưỡng lên`
-- `Ngưỡng xuống`
-- `Pha`
-- `Tạm block`
-
-## Phần số liệu cần nhìn
-
-### 1. Biên độ xuống
-
-- `biên độ xuống = Nền - Head mượt thấp nhất`
-
-Nếu xuống mà vẫn không vào đáy:
-
-- thường là `Head mượt thấp nhất` vẫn chưa nhỏ hơn `Ngưỡng xuống`
-
-### 2. Biên độ lên
-
-- nhìn xem lúc lên cao nhất, `Head mượt` có vượt lại `Ngưỡng lên` chưa
-
-Nếu chưa vượt:
-
-- app không cộng số
-
-## Cách đọc nhanh
-
-### Không lấy được mốc
-
-Nhìn:
-
-- `Hiệu chỉnh`
-- `Frame vào calib`
-
-Nếu:
-
-- `Hiệu chỉnh` không tăng
-- `Frame vào calib = no`
-
-thì app chưa lấy được mốc.
-
-### Không xuống đủ sâu
-
-Nhìn:
-
-- `Head mượt thấp nhất`
-- `Ngưỡng xuống`
-
-Nếu:
-
-- `Head mượt thấp nhất > Ngưỡng xuống`
-
-thì ngưỡng xuống đang quá gắt hoặc biên độ xuống chưa đủ.
-
-### Lên rồi mà vẫn không cộng
-
-Nhìn:
-
-- `Head mượt cao nhất khi lên`
-- `Ngưỡng lên`
-- `Tạm block`
-- `Thời gian rep`
-
-Nếu:
-
-- `Head mượt` chưa vượt `Ngưỡng lên`
-
-thì chưa lên đủ cao.
-
-Nếu đã vượt mà vẫn không cộng:
-
-- thường bị chặn bởi góc tay hoặc thời gian.
-
-## Tóm tắt rất ngắn
-
-App đang đếm theo kiểu:
-
-- đầu đi xuống đủ sâu
-- rồi đi lên đủ cao
-
-Muốn biết cần chỉnh gì thì nhìn 3 số:
-
-- `Nền`
-- `Ngưỡng lên`
-- `Ngưỡng xuống`
-
-và so với:
-
-- `Head mượt` lúc trên cao nhất
-- `Head mượt` lúc dưới thấp nhất
+- App không đếm ngay: phải vào `tư thế sẵn sàng` trước.
+- App đếm theo `độ cao đầu so với trục giữa 2 vai`.
+- Đủ một vòng `lên xuống lên` thì cộng `1 rep`.

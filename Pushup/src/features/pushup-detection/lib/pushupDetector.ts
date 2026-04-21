@@ -7,11 +7,6 @@ import type { DetectorFrameState, DetectorPhase } from "../model/detectorTypes";
 
 type Thresholds = ReturnType<typeof getThresholdsForPlatform>;
 
-type BufferEntry = {
-  timestampMs: number;
-  value: number;
-};
-
 function createBaseFrameState(message: string): DetectorFrameState {
   return {
     status: "tracking",
@@ -30,6 +25,7 @@ function createBaseFrameState(message: string): DetectorFrameState {
       smoothedHeadHeight: null,
       rawMotionSignal: null,
       smoothedMotionSignal: null,
+      motionTrend: "unknown",
       rawElbowAngle: null,
       smoothedElbowAngle: null,
       transitionFrom: "unknown",
@@ -42,66 +38,116 @@ function createBaseFrameState(message: string): DetectorFrameState {
       activationRange: null,
       oscillationRange: 0,
       bufferFill: 0,
+      readyToCount: false,
+      readyProgress: 0,
+      readyFaceVisible: false,
+      readyShouldersVisible: false,
+      readyHipsVisible: false,
+      readyElbowsVisible: false,
+      readyFacingCamera: false,
       repBlockReason: "none",
     },
   };
 }
 
-function trackingMessage(active: boolean, phase: DetectorPhase, completedRep: boolean) {
+function trackingMessage(active: boolean, completedRep: boolean) {
   if (!active) {
-    return "Sẵn sàng — bắt đầu hít đi";
+    return "Dung vao tu the san sang";
   }
 
   if (completedRep) {
-    return "Tốt lắm, tiếp tục nhịp tiếp theo";
+    return "Tot lam, tiep tuc nhip tiep theo";
   }
 
-  switch (phase) {
-    case "up":
-    case "going_down":
-      return "Hạ xuống";
-    case "down":
-    case "going_up":
-      return "Đẩy lên";
-    default:
-      return "Đang theo dõi";
-  }
+  return "Giu tu the on dinh va ro trong khung hinh";
 }
 
-function isBottomVerified(elbowAngle: number | null, elbowConfidence: number, threshold: number) {
-  if (elbowAngle === null || elbowConfidence <= threshold) {
-    return true;
+function readinessMessage(checks: {
+  faceVisible: boolean;
+  shouldersVisible: boolean;
+  hipsVisible: boolean;
+  elbowsVisible: boolean;
+  facingCamera: boolean;
+}) {
+  if (!checks.faceVisible) {
+    return "Dua mat vao ro truoc camera";
   }
 
-  return elbowAngle < 140;
-}
-
-function isTopVerified(elbowAngle: number | null, elbowConfidence: number, threshold: number) {
-  if (elbowAngle === null || elbowConfidence <= threshold) {
-    return true;
+  if (!checks.shouldersVisible) {
+    return "Can thay ro ca 2 vai";
   }
 
-  return elbowAngle > 145;
+  if (!checks.hipsVisible) {
+    return "Can thay ro ca 2 ben hong";
+  }
+
+  if (!checks.elbowsVisible) {
+    return "Can thay ro ca 2 khuyu tay";
+  }
+
+  if (!checks.facingCamera) {
+    return "Xoay mat doi dien camera";
+  }
+
+  return "Giu yen de xac nhan tu the san sang";
 }
 
 export class PushupDetector {
   private readonly thresholds: Thresholds;
   private readonly smoother: EmaSmoother;
-  private readonly rangeBuffer: BufferEntry[] = [];
   private phase: DetectorPhase = "unknown";
+  private pendingPhase: DetectorPhase | null = null;
+  private pendingPhaseFrames = 0;
   private repCount = 0;
   private lastRepTimestampMs = 0;
   private previousFrameTimestampMs = 0;
+  private previousSmoothedSignal: number | null = null;
   private active = false;
+  private readyToCount = false;
+  private readyFrames = 0;
 
   constructor(userAgent: string) {
     this.thresholds = getThresholdsForPlatform(userAgent);
     this.smoother = new EmaSmoother(this.thresholds.emaAlpha);
   }
 
+  private confirmPhase(nextPhase: DetectorPhase) {
+    if (nextPhase === this.phase) {
+      this.pendingPhase = null;
+      this.pendingPhaseFrames = 0;
+      return this.phase;
+    }
+
+    if (this.pendingPhase === nextPhase) {
+      this.pendingPhaseFrames += 1;
+    } else {
+      this.pendingPhase = nextPhase;
+      this.pendingPhaseFrames = 1;
+    }
+
+    if (this.pendingPhaseFrames >= this.thresholds.phaseConfirmFrames) {
+      this.pendingPhase = null;
+      this.pendingPhaseFrames = 0;
+      return nextPhase;
+    }
+
+    return this.phase;
+  }
+
   process(result: PoseLandmarkerResult, timestampMs: number) {
-    const frame = createBaseFrameState("Đưa mặt và vai vào khung hình");
+    const frame = createBaseFrameState("Dua mat va vai vao khung hinh");
     const landmarks = result.landmarks[0];
+
+    frame.debug.active = this.active;
+    frame.debug.readyToCount = this.readyToCount;
+    frame.phase = this.phase;
+    frame.repCount = this.repCount;
+    frame.debug.transitionFrom = this.phase;
+    frame.debug.transitionTo = this.phase;
+    frame.debug.minRepDurationMs = this.thresholds.minRepDurationMs;
+    frame.debug.maxRepDurationMs = this.thresholds.maxRepDurationMs;
+    frame.debug.activationRange = this.thresholds.activationRange;
+    frame.debug.readyProgress = Math.min(this.readyFrames / this.thresholds.readyHoldFrames, 1);
 
     if (!landmarks) {
       frame.debug.repBlockReason = "missing_landmarks";
@@ -109,80 +155,76 @@ export class PushupDetector {
     }
 
     const metrics = getPoseMetrics(landmarks);
-    const trackingConfidence = Math.min(metrics.shoulderConfidence, metrics.elbowConfidence);
+    const trackingConfidence = metrics.shoulderConfidence;
 
     frame.confidence = trackingConfidence;
     frame.fps = this.previousFrameTimestampMs
       ? Math.round(1000 / Math.max(1, timestampMs - this.previousFrameTimestampMs))
       : 0;
-    frame.debug.active = this.active;
     frame.debug.rawHeadHeight = metrics.headHeight;
     frame.debug.rawElbowAngle = metrics.elbowAngle;
-    frame.debug.transitionFrom = this.phase;
-    frame.debug.transitionTo = this.phase;
-    frame.debug.minRepDurationMs = this.thresholds.minRepDurationMs;
-    frame.debug.maxRepDurationMs = this.thresholds.maxRepDurationMs;
-    frame.debug.activationRange = this.thresholds.activationRange;
     this.previousFrameTimestampMs = timestampMs;
 
+    const faceVisible = metrics.noseConfidence >= this.thresholds.readyVisibilityThreshold;
+    const shouldersVisible = metrics.shoulderConfidence >= this.thresholds.readyVisibilityThreshold;
+    const hipsVisible = metrics.hipConfidence >= this.thresholds.readyVisibilityThreshold;
+    const elbowsVisible = metrics.elbowJointConfidence >= this.thresholds.readyVisibilityThreshold;
+    const facingCamera =
+      metrics.noseOffsetFromShoulderCenterRatio !== null &&
+      metrics.noseOffsetFromShoulderCenterRatio <= this.thresholds.readyFaceCenterToleranceRatio;
+    const readyPose =
+      faceVisible && shouldersVisible && hipsVisible && elbowsVisible && facingCamera;
+
+    frame.debug.readyFaceVisible = faceVisible;
+    frame.debug.readyShouldersVisible = shouldersVisible;
+    frame.debug.readyHipsVisible = hipsVisible;
+    frame.debug.readyElbowsVisible = elbowsVisible;
+    frame.debug.readyFacingCamera = facingCamera;
+
     if (metrics.headHeight === null) {
+      this.readyFrames = 0;
       frame.debug.repBlockReason = "missing_landmarks";
-      frame.message = "Đưa mặt và vai rõ hơn vào khung hình";
+      frame.message = "Dua mat va vai ro hon vao khung hinh";
       return frame;
     }
 
     const rawSignal = metrics.headHeight;
     const smoothedSignal = this.smoother.next(rawSignal);
+    const motionDelta =
+      this.previousSmoothedSignal === null ? null : smoothedSignal - this.previousSmoothedSignal;
+    const motionTrend =
+      motionDelta === null
+        ? "unknown"
+        : motionDelta <= -this.thresholds.motionTrendThreshold
+          ? "falling"
+          : motionDelta >= this.thresholds.motionTrendThreshold
+            ? "rising"
+            : "steady";
+    this.previousSmoothedSignal = smoothedSignal;
     frame.debug.smoothedHeadHeight = smoothedSignal;
     frame.debug.rawMotionSignal = rawSignal;
     frame.debug.smoothedMotionSignal = smoothedSignal;
+    frame.debug.motionTrend = motionTrend;
     frame.debug.smoothedElbowAngle = metrics.elbowAngle;
-
-    this.rangeBuffer.push({ timestampMs, value: smoothedSignal });
-    while (
-      this.rangeBuffer.length &&
-      timestampMs - this.rangeBuffer[0].timestampMs > this.thresholds.baselineWindowMs
-    ) {
-      this.rangeBuffer.shift();
-    }
-
-    const minSignal = this.rangeBuffer.reduce(
-      (min, entry) => Math.min(min, entry.value),
-      Number.POSITIVE_INFINITY,
-    );
-    const maxSignal = this.rangeBuffer.reduce(
-      (max, entry) => Math.max(max, entry.value),
-      Number.NEGATIVE_INFINITY,
-    );
-    const oscillationRange =
-      Number.isFinite(minSignal) && Number.isFinite(maxSignal) ? maxSignal - minSignal : 0;
-    const bufferDurationMs =
-      this.rangeBuffer.length >= 2
-        ? this.rangeBuffer[this.rangeBuffer.length - 1].timestampMs -
-          this.rangeBuffer[0].timestampMs
-        : 0;
-    const bufferFill = Math.min(bufferDurationMs / this.thresholds.baselineWindowMs, 1);
 
     frame.baseline = 0;
     frame.upThreshold = this.thresholds.upPositionThreshold;
     frame.downThreshold = this.thresholds.downPositionThreshold;
-    frame.debug.oscillationRange = oscillationRange;
-    frame.debug.bufferFill = bufferFill;
 
-    if (trackingConfidence < this.thresholds.confidenceThreshold) {
-      frame.phase = this.phase;
-      frame.repCount = this.repCount;
-      frame.debug.repBlockReason = "low_confidence";
-      frame.message = "Giữ mặt, vai và tay rõ hơn";
-      return frame;
-    }
+    if (!this.readyToCount) {
+      this.readyFrames = readyPose ? this.readyFrames + 1 : 0;
+      frame.debug.readyProgress = Math.min(this.readyFrames / this.thresholds.readyHoldFrames, 1);
+      frame.debug.repBlockReason = readyPose ? "none" : "waiting_for_ready";
+      frame.message = readinessMessage({
+        faceVisible,
+        shouldersVisible,
+        hipsVisible,
+        elbowsVisible,
+        facingCamera,
+      });
 
-    const activationReady =
-      this.rangeBuffer.length > 0 &&
-      timestampMs - this.rangeBuffer[0].timestampMs >= this.thresholds.minBufferForActivationMs;
-
-    if (!this.active) {
-      if (activationReady && oscillationRange >= this.thresholds.activationRange) {
+      if (this.readyFrames >= this.thresholds.readyHoldFrames) {
+        this.readyToCount = true;
         this.active = true;
         this.phase =
           smoothedSignal <= this.thresholds.downPositionThreshold
@@ -190,70 +232,78 @@ export class PushupDetector {
             : smoothedSignal >= this.thresholds.upPositionThreshold
               ? "up"
               : "unknown";
+        frame.debug.active = this.active;
+        frame.debug.readyToCount = true;
+        frame.phase = this.phase;
+        frame.debug.transitionTo = this.phase;
+        frame.message = "San sang, bat dau dem rep";
+      } else {
+        frame.phase = "unknown";
+        frame.repCount = this.repCount;
+        return frame;
       }
+    }
 
-      frame.debug.active = this.active;
+    if (trackingConfidence < this.thresholds.confidenceThreshold) {
       frame.phase = this.phase;
       frame.repCount = this.repCount;
-      frame.debug.transitionTo = this.phase;
-      frame.debug.repBlockReason = this.active ? "none" : "waiting_for_activation";
-      frame.message = trackingMessage(this.active, this.phase, false);
+      frame.debug.repBlockReason = "low_confidence";
+      frame.message = "Giu ro 2 vai trong khung hinh";
+      frame.debug.readyToCount = this.readyToCount;
       return frame;
     }
 
-    const bottomVerified = isBottomVerified(
-      metrics.elbowAngle,
-      metrics.elbowConfidence,
-      this.thresholds.confidenceThreshold,
-    );
-    const topVerified = isTopVerified(
-      metrics.elbowAngle,
-      metrics.elbowConfidence,
-      this.thresholds.confidenceThreshold,
-    );
-
-    let nextPhase = this.phase;
-    let transitionCompletedRep = false;
+    let candidatePhase = this.phase;
+    let candidateCompletedRep = false;
+    const upwardGate = this.thresholds.upPositionThreshold + this.thresholds.positionHysteresis;
+    const downwardGate =
+      this.thresholds.downPositionThreshold - this.thresholds.positionHysteresis;
 
     switch (this.phase) {
       case "unknown":
         if (smoothedSignal <= this.thresholds.downPositionThreshold) {
-          nextPhase = "down";
+          candidatePhase = "down";
         } else if (smoothedSignal >= this.thresholds.upPositionThreshold) {
-          nextPhase = "up";
+          candidatePhase = "up";
         }
         break;
       case "up":
-        if (smoothedSignal <= this.thresholds.upPositionThreshold) {
-          nextPhase = "going_down";
+        if (smoothedSignal <= this.thresholds.upPositionThreshold - this.thresholds.positionHysteresis) {
+          candidatePhase = "going_down";
         }
         break;
       case "going_down":
-        if (smoothedSignal < this.thresholds.downPositionThreshold && bottomVerified) {
-          nextPhase = "down";
-        } else if (smoothedSignal > this.thresholds.upPositionThreshold) {
-          nextPhase = "up";
+        if (smoothedSignal <= downwardGate) {
+          candidatePhase = "down";
+        } else if (smoothedSignal >= upwardGate) {
+          candidatePhase = "up";
         }
         break;
       case "down":
-        if (smoothedSignal >= this.thresholds.downPositionThreshold) {
-          nextPhase = "going_up";
+        if (smoothedSignal >= this.thresholds.downPositionThreshold + this.thresholds.positionHysteresis) {
+          candidatePhase = "going_up";
         }
         break;
       case "going_up":
-        if (smoothedSignal > this.thresholds.upPositionThreshold && topVerified) {
-          nextPhase = "up";
-          transitionCompletedRep = true;
-        } else if (smoothedSignal < this.thresholds.downPositionThreshold) {
-          nextPhase = "down";
+        if (smoothedSignal >= upwardGate) {
+          candidatePhase = "up";
+          candidateCompletedRep = true;
+        } else if (smoothedSignal <= downwardGate) {
+          candidatePhase = "down";
         }
         break;
     }
 
-    const elapsedMs = this.lastRepTimestampMs
+    const previousPhase = this.phase;
+    const nextPhase = this.confirmPhase(candidatePhase);
+    const transitionCompletedRep =
+      candidateCompletedRep && nextPhase === candidatePhase && nextPhase !== previousPhase;
+
+    const hasPreviousRep = this.lastRepTimestampMs > 0;
+    const elapsedMs = hasPreviousRep
       ? timestampMs - this.lastRepTimestampMs
-      : Number.MAX_SAFE_INTEGER;
-    frame.debug.elapsedMsSinceLastRep = this.lastRepTimestampMs ? elapsedMs : null;
+      : this.thresholds.minRepDurationMs;
+    frame.debug.elapsedMsSinceLastRep = hasPreviousRep ? elapsedMs : null;
 
     const completedRep =
       transitionCompletedRep &&
@@ -266,22 +316,14 @@ export class PushupDetector {
       });
 
     let repBlockReason: DetectorFrameState["debug"]["repBlockReason"] = "none";
-    if (
-      this.phase === "going_down" &&
-      smoothedSignal <= this.thresholds.downPositionThreshold &&
-      !bottomVerified
-    ) {
-      repBlockReason = "waiting_for_bottom";
-    } else if (transitionCompletedRep && elapsedMs < this.thresholds.minRepDurationMs) {
+    if (transitionCompletedRep && hasPreviousRep && elapsedMs < this.thresholds.minRepDurationMs) {
       repBlockReason = "duration_too_short";
-    } else if (transitionCompletedRep && elapsedMs > this.thresholds.maxRepDurationMs) {
-      repBlockReason = "duration_too_long";
     } else if (
-      this.phase === "going_up" &&
-      smoothedSignal >= this.thresholds.upPositionThreshold &&
-      !topVerified
+      transitionCompletedRep &&
+      hasPreviousRep &&
+      elapsedMs > this.thresholds.maxRepDurationMs
     ) {
-      repBlockReason = "waiting_for_full_extension";
+      repBlockReason = "duration_too_long";
     }
 
     this.phase = nextPhase;
@@ -289,14 +331,15 @@ export class PushupDetector {
     if (completedRep) {
       this.repCount += 1;
       this.lastRepTimestampMs = timestampMs;
-    } else if (this.phase === "up" && elapsedMs > this.thresholds.maxRepDurationMs) {
+    } else if (this.phase === "up" && hasPreviousRep && elapsedMs > this.thresholds.maxRepDurationMs) {
       this.lastRepTimestampMs = 0;
     }
 
     frame.debug.active = this.active;
+    frame.debug.readyToCount = this.readyToCount;
     frame.phase = this.phase;
     frame.repCount = this.repCount;
-    frame.message = trackingMessage(this.active, this.phase, completedRep);
+    frame.message = trackingMessage(this.active, completedRep);
     frame.debug.transitionTo = this.phase;
     frame.debug.transitionCompletedRep = transitionCompletedRep;
     frame.debug.reachedBottom = this.phase === "down" || this.phase === "going_up";
@@ -307,11 +350,28 @@ export class PushupDetector {
 
   reset() {
     this.phase = "unknown";
+    this.pendingPhase = null;
+    this.pendingPhaseFrames = 0;
     this.repCount = 0;
     this.lastRepTimestampMs = 0;
     this.previousFrameTimestampMs = 0;
+    this.previousSmoothedSignal = null;
     this.active = false;
-    this.rangeBuffer.length = 0;
+    this.readyToCount = false;
+    this.readyFrames = 0;
+    this.smoother.reset();
+  }
+
+  resetForReplay() {
+    this.phase = "unknown";
+    this.pendingPhase = null;
+    this.pendingPhaseFrames = 0;
+    this.lastRepTimestampMs = 0;
+    this.previousFrameTimestampMs = 0;
+    this.previousSmoothedSignal = null;
+    this.active = false;
+    this.readyToCount = false;
+    this.readyFrames = 0;
     this.smoother.reset();
   }
 }

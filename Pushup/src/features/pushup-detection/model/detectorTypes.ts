@@ -11,11 +11,13 @@ export type DetectorStatus =
   | "finished";
 
 export type DetectorPhase = "up" | "going_down" | "down" | "going_up" | "unknown";
+export type DetectorMotionTrend = "rising" | "falling" | "steady" | "unknown";
 
 export type DetectorRepBlockReason =
   | "none"
   | "missing_landmarks"
   | "low_confidence"
+  | "waiting_for_ready"
   | "waiting_for_activation"
   | "duration_too_short"
   | "duration_too_long"
@@ -28,6 +30,7 @@ export type DetectorDebugState = {
   smoothedHeadHeight: number | null;
   rawMotionSignal: number | null;
   smoothedMotionSignal: number | null;
+  motionTrend: DetectorMotionTrend;
   rawElbowAngle: number | null;
   smoothedElbowAngle: number | null;
   transitionFrom: DetectorPhase;
@@ -40,6 +43,13 @@ export type DetectorDebugState = {
   activationRange: number | null;
   oscillationRange: number;
   bufferFill: number;
+  readyToCount: boolean;
+  readyProgress: number;
+  readyFaceVisible: boolean;
+  readyShouldersVisible: boolean;
+  readyHipsVisible: boolean;
+  readyElbowsVisible: boolean;
+  readyFacingCamera: boolean;
   repBlockReason: DetectorRepBlockReason;
 };
 
@@ -68,5 +78,9 @@ export type PoseMetrics = {
   elbowAngle: number | null;
   shoulderConfidence: number;
   elbowConfidence: number;
+  elbowJointConfidence: number;
+  hipConfidence: number;
+  noseConfidence: number;
+  noseOffsetFromShoulderCenterRatio: number | null;
   confidence: number;
 };

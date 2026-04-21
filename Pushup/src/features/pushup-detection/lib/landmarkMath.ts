@@ -69,23 +69,27 @@ export function getPoseMetrics(landmarks: NormalizedLandmark[]): PoseMetrics {
 
   const shoulderConfidence = visibilityOf(leftShoulder, rightShoulder);
   const elbowConfidence = visibilityOf(leftElbow, rightElbow, leftWrist, rightWrist);
+  const elbowJointConfidence = visibilityOf(leftElbow, rightElbow);
   const hipConfidence = visibilityOf(leftHip, rightHip);
   const noseConfidence = visibilityOf(nose);
 
   const midShoulderY =
     leftShoulder && rightShoulder ? average(leftShoulder.y, rightShoulder.y) : null;
-  const midHipY = leftHip && rightHip ? average(leftHip.y, rightHip.y) : null;
 
   let headHeight: number | null = null;
   if (nose && midShoulderY !== null && noseConfidence > 0.4) {
     headHeight = midShoulderY - nose.y;
-  } else if (midShoulderY !== null && midHipY !== null && hipConfidence > 0.4) {
-    headHeight = midHipY - midShoulderY;
   }
 
   const shoulderWidth =
     leftShoulder && rightShoulder && shoulderConfidence > 0.4
       ? distance(leftShoulder, rightShoulder)
+      : null;
+  const midShoulderX =
+    leftShoulder && rightShoulder ? average(leftShoulder.x, rightShoulder.x) : null;
+  const noseOffsetFromShoulderCenterRatio =
+    nose && midShoulderX !== null && shoulderWidth && shoulderWidth > 0
+      ? Math.abs(nose.x - midShoulderX) / shoulderWidth
       : null;
 
   let elbowAngle: number | null = null;
@@ -103,6 +107,10 @@ export function getPoseMetrics(landmarks: NormalizedLandmark[]): PoseMetrics {
     elbowAngle,
     shoulderConfidence,
     elbowConfidence,
+    elbowJointConfidence,
+    hipConfidence,
+    noseConfidence,
+    noseOffsetFromShoulderCenterRatio,
     confidence: Math.min(shoulderConfidence, elbowConfidence),
   };
 }

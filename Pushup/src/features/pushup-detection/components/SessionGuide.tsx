@@ -8,6 +8,19 @@ type SessionGuideProps = {
   confidence: number;
 };
 
+function isCorrectionMessage(message: string) {
+  return [
+    "Dua mat vao ro truoc camera",
+    "Can thay ro ca 2 vai",
+    "Can thay ro ca 2 ben hong",
+    "Can thay ro ca 2 khuyu tay",
+    "Xoay mat doi dien camera",
+    "Giu yen de xac nhan tu the san sang",
+    "Dua mat va vai ro hon vao khung hinh",
+    "Giu ro 2 vai trong khung hinh",
+  ].includes(message);
+}
+
 function statusLabel(status: DetectorStatus, phase: DetectorPhase) {
   switch (status) {
     case "requesting_camera":
@@ -28,14 +41,18 @@ function statusLabel(status: DetectorStatus, phase: DetectorPhase) {
 }
 
 function nextAction(status: DetectorStatus, phase: DetectorPhase, fallback: string) {
+  if (isCorrectionMessage(fallback)) {
+    return fallback;
+  }
+
   if (status === "tracking" && phase !== "unknown") {
     switch (phase) {
       case "up":
       case "going_down":
-        return "Hạ người xuống chậm và sâu hơn";
+        return "Hạ người xuống chậm";
       case "down":
       case "going_up":
-        return "Đẩy mạnh người lên về đỉnh";
+        return "Đẩy mạnh người lên";
       default:
         return fallback;
     }
