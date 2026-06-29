@@ -320,9 +320,9 @@ def _render_shadow(
     subject_pos: tuple[int, int],
 ) -> Image.Image:
     mask = Image.new("L", canvas_size, 0)
-    shadow_pos = (subject_pos[0], subject_pos[1] + 14)
+    shadow_pos = (subject_pos[0], subject_pos[1] + 8)
     mask.paste(alpha, shadow_pos, alpha)
-    mask = mask.filter(ImageFilter.GaussianBlur(radius=26))
+    mask = mask.filter(ImageFilter.GaussianBlur(radius=18))
     shadow = Image.new("RGBA", canvas_size, (7, 11, 18, 0))
-    shadow.putalpha(mask.point(lambda value: min(255, int(value * 0.42))))
+    shadow.putalpha(mask.point(lambda value: min(255, int(value * 0.30))))
     return shadow

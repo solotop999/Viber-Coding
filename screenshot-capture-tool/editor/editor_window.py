@@ -48,7 +48,7 @@ def _default_save_path() -> Path:
 
 
 class EditorWindow(QWidget):
-    recapture_requested = pyqtSignal()
+    recapture_requested = pyqtSignal(int)
 
     def __init__(self, pil_image: Image.Image) -> None:
         super().__init__()
@@ -247,9 +247,9 @@ class EditorWindow(QWidget):
         self.raise_()
         self.activateWindow()
 
-    def request_recapture(self) -> None:
+    def request_recapture(self, delay_ms: int = 0) -> None:
         self.prepare_for_recapture()
-        self.recapture_requested.emit()
+        self.recapture_requested.emit(max(0, int(delay_ms)))
 
     def copy_image(self) -> None:
         focused = QApplication.focusWidget()

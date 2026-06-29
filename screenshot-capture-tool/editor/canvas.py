@@ -11,7 +11,7 @@ import copy
 import io
 
 from PIL import Image
-from PyQt6.QtCore import QPointF, Qt
+from PyQt6.QtCore import QPointF, QRectF, Qt
 from PyQt6.QtGui import QColor, QImage, QPainter, QPixmap
 from PyQt6.QtWidgets import QGraphicsDropShadowEffect, QWidget
 
@@ -62,6 +62,11 @@ class AnnotationCanvas(QWidget):
 
         self._annotations: list[Annotation] = []
         self._undo_stack: list[list[Annotation]] = []
+        self._moving_rect_index: int | None = None
+        self._move_start = QPointF()
+        self._move_original_start = QPointF()
+        self._move_original_end = QPointF()
+        self._move_undo_pushed = False
 
         self._color = QColor(_DEFAULT_COLOR)
         self._stroke_width = 3
@@ -86,6 +91,7 @@ class AnnotationCanvas(QWidget):
         return self._pil_image.copy()
 
     def set_image(self, pil_image: Image.Image) -> None:
+        self._reset_rect_move()
         self._pil_image = pil_image
         self._annotations.clear()
         self._undo_stack.clear()
@@ -97,9 +103,9 @@ class AnnotationCanvas(QWidget):
 
     def set_shadow_enabled(self, enabled: bool) -> None:
         if enabled:
-            self._shadow.setBlurRadius(30)
+            self._shadow.setBlurRadius(18)
             self._shadow.setOffset(0, 8)
-            self._shadow.setColor(QColor(6, 10, 18, 92))
+            self._shadow.setColor(QColor(6, 10, 18, 76))
             return
 
         self._shadow.setBlurRadius(1)
@@ -107,6 +113,7 @@ class AnnotationCanvas(QWidget):
         self._shadow.setColor(QColor(0, 0, 0, 0))
 
     def set_tool(self, name: str) -> None:
+        self._reset_rect_move()
         self.cancel_active_tool()
         self._active_tool_name = name
         self._tool = self._make_tool(name)
@@ -188,14 +195,46 @@ class AnnotationCanvas(QWidget):
 
     def mousePressEvent(self, event) -> None:
         if event.button() == Qt.MouseButton.LeftButton:
-            self._tool.press(QPointF(event.pos()))
+            pos = QPointF(event.pos())
+            if self._active_tool_name == TOOL_RECT:
+                index = self._rect_border_at(pos)
+                if index is not None:
+                    ann = self._annotations[index]
+                    self._moving_rect_index = index
+                    self._move_start = pos
+                    self._move_original_start = QPointF(ann.start)
+                    self._move_original_end = QPointF(ann.end)
+                    self._move_undo_pushed = False
+                    self.setCursor(Qt.CursorShape.SizeAllCursor)
+                    return
+            self._reset_rect_move()
+            self._tool.press(pos)
 
     def mouseMoveEvent(self, event) -> None:
-        self._tool.move(QPointF(event.pos()))
+        pos = QPointF(event.pos())
+        if self._moving_rect_index is not None:
+            delta = pos - self._move_start
+            if not self._move_undo_pushed and delta.manhattanLength() > 2:
+                self._push_undo()
+                self._move_undo_pushed = True
+            if self._move_undo_pushed:
+                delta = self._constrained_rect_delta(delta)
+                ann = self._annotations[self._moving_rect_index]
+                ann.start = self._move_original_start + delta
+                ann.end = self._move_original_end + delta
+            self.update()
+            return
+
+        self._tool.move(pos)
         self.update()
 
     def mouseReleaseEvent(self, event) -> None:
         if event.button() != Qt.MouseButton.LeftButton:
+            return
+
+        if self._moving_rect_index is not None:
+            self._reset_rect_move()
+            self.update()
             return
 
         ann = self._tool.release(QPointF(event.pos()))
@@ -203,6 +242,30 @@ class AnnotationCanvas(QWidget):
             self._push_undo()
             self._annotations.append(ann)
             self.update()
+
+    def _rect_border_at(self, pos: QPointF) -> int | None:
+        for index in range(len(self._annotations) - 1, -1, -1):
+            ann = self._annotations[index]
+            if ann.kind != "rect":
+                continue
+            rect = QRectF(ann.start, ann.end).normalized()
+            tolerance = max(7.0, float(ann.stroke_width) + 4.0)
+            outer = rect.adjusted(-tolerance, -tolerance, tolerance, tolerance)
+            inner = rect.adjusted(tolerance, tolerance, -tolerance, -tolerance)
+            if outer.contains(pos) and (not inner.isValid() or not inner.contains(pos)):
+                return index
+        return None
+
+    def _constrained_rect_delta(self, delta: QPointF) -> QPointF:
+        rect = QRectF(self._move_original_start, self._move_original_end).normalized()
+        dx = max(-rect.left(), min(delta.x(), self.width() - rect.right()))
+        dy = max(-rect.top(), min(delta.y(), self.height() - rect.bottom()))
+        return QPointF(dx, dy)
+
+    def _reset_rect_move(self) -> None:
+        self._moving_rect_index = None
+        self._move_undo_pushed = False
+        self.setCursor(Qt.CursorShape.ArrowCursor)
 
     def paintEvent(self, _event) -> None:
         painter = QPainter(self)

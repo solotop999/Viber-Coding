@@ -125,10 +125,10 @@ class CaptureApp:
         editor.hide()
         self._editor = editor
 
-    def _start_recapture(self) -> None:
+    def _start_recapture(self, delay_ms: int = 0) -> None:
         if self._editor:
             self._editor.hide_for_recapture()
-        QTimer.singleShot(220, self._show_recapture_overlay)
+        QTimer.singleShot(max(0, int(delay_ms)), self._show_recapture_overlay)
 
     def _show_recapture_overlay(self) -> None:
         overlay = SelectionOverlay()
@@ -143,7 +143,7 @@ class CaptureApp:
         from processing.corners import apply_rounded_corners
 
         image = grab_region(x, y, w, h)
-        return apply_rounded_corners(image.convert("RGBA"), radius=22)
+        return apply_rounded_corners(image.convert("RGBA"))
 
     def _on_region_selected(self, x: int, y: int, w: int, h: int) -> None:
         self._overlay = None

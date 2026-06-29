@@ -150,6 +150,13 @@ def _make_tool_icon(symbol: str, size: int = 28) -> QIcon:
         half_len = size // 2 - margin
         painter.drawLine(cx, cy - half_len, cx, cy + half_len)
         painter.drawLine(cx - half_len, cy, cx + half_len, cy)
+    elif symbol == "timer":
+        clock = QRect(margin + 2, margin + 3, size - (margin + 2) * 2, size - (margin + 2) * 2)
+        painter.drawEllipse(clock)
+        center = clock.center()
+        painter.drawLine(center.x(), center.y(), center.x(), clock.top() + 4)
+        painter.drawLine(center.x(), center.y(), clock.right() - 4, center.y() + 3)
+        painter.drawLine(center.x() - 3, margin, center.x() + 3, margin)
     elif symbol == "undo":
         font = QFont("Segoe UI Symbol", 19)
         painter.setFont(font)
@@ -258,6 +265,11 @@ class _ActionBtn(QToolButton):
             }
             QToolButton:pressed {
                 background: #B3D9FF;
+            }
+            QToolButton::menu-indicator {
+                image: none;
+                width: 0px;
+                height: 0px;
             }
         """)
 
@@ -473,8 +485,24 @@ class Toolbar(QWidget):
         row.setContentsMargins(0, 0, 0, 0)
 
         button = _ActionBtn("new", "New", "New screenshot  Ctrl+N")
-        button.clicked.connect(self._editor.request_recapture)
+        button.clicked.connect(lambda: self._editor.request_recapture(0))
         row.addWidget(button)
+
+        timer_button = _ActionBtn("timer", "Hẹn giờ", "Chụp màn hình sau một khoảng trễ")
+        timer_menu = QMenu(timer_button)
+        for label, delay_ms in (
+            ("Không trễ", 0),
+            ("Sau 3 giây", 3_000),
+            ("Sau 5 giây", 5_000),
+            ("Sau 10 giây", 10_000),
+        ):
+            action = timer_menu.addAction(label)
+            action.triggered.connect(
+                lambda _checked=False, ms=delay_ms: self._editor.request_recapture(ms)
+            )
+        timer_button.setMenu(timer_menu)
+        timer_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        row.addWidget(timer_button)
 
         vbox.addLayout(row)
         return vbox
