@@ -46,7 +46,8 @@ Output: `dist/capture.exe`
 
 ## Bản phát hành sẵn
 
-- File dùng ngay: `Solotop Capture.exe`
+- **[⬇️ Tải Solotop Capture cho Windows](https://github.com/solotop999/Viber-Coding/raw/refs/heads/main/screenshot-capture-tool/Solotop%20Capture.exe)**
+- File dùng ngay: `Solotop Capture.exe` — tải về và mở, không cần cài đặt
 - Kích thước: `39,574,513 bytes` (~37.7 MiB)
 - MD5: `D7366A223B1CD948EE0A195B165306E2`
 

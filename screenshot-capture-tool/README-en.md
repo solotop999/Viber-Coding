@@ -45,7 +45,8 @@ Output: `dist/capture.exe`
 
 ## Prebuilt release
 
-- Ready-to-use file: `Solotop Capture.exe`
+- **[⬇️ Download Solotop Capture for Windows](https://github.com/solotop999/Viber-Coding/raw/refs/heads/main/screenshot-capture-tool/Solotop%20Capture.exe)**
+- Ready-to-use file: `Solotop Capture.exe` — download and run, no installation required
 - Size: `39,574,513 bytes` (~37.7 MiB)
 - MD5: `D7366A223B1CD948EE0A195B165306E2`
 
