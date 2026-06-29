@@ -2,7 +2,7 @@
 
 - Công cụ chụp màn hình cho Windows: nhẹ, nhanh và đẹp.
 - Hỗ trợ ghi chú, bo viền, tạo nền mờ/nền màu để làm nổi bật nội dung
-- Tự động tối ưu kích thước ảnh chuẩn để đăng lên X (Twitter).
+- Có khung hướng dẫn tỉ lệ và cảnh báo ảnh nhỏ để đăng lên X (Twitter) rõ nét hơn.
 
 100% Open-source. Chạy offline, không thu thập dữ liệu, không tracking, không chạy nền, không quảng cáo, sạch và minh bạch.
 
@@ -47,7 +47,8 @@ Output: `dist/capture.exe`
 ## Bản phát hành sẵn
 
 - File dùng ngay: `Solotop Capture.exe`
-- MD5: `49596B9C8540041429FCD4EF0A8005A0`
+- Kích thước: `39,574,513 bytes` (~37.7 MiB)
+- MD5: `D7366A223B1CD948EE0A195B165306E2`
 
 ## Hỗ trợ
 
@@ -61,11 +62,11 @@ Output: `dist/capture.exe`
 Tool này **không kết nối mạng**. Không có server, không có tài khoản, không có analytics, không có crash reporting, không có auto-update.
 
 Cụ thể hơn:
-- Toàn bộ module network (`socket`, `ssl`, `http`, `urllib`, `PyQt6.QtNetwork`, `PyQt6.QtWebEngine`) bị **loại khỏi bản build** — không phải tắt, mà là không tồn tại trong file `.exe`.
+- Code ứng dụng không gửi network request; các network client Python và Qt WebEngine không dùng đã được loại khỏi bản build.
 - Không có `eval`, `exec`, `subprocess`, hay bất kỳ cách nào chạy code bên ngoài.
 - Không auto-start cùng Windows. Không system tray. Không chạy nền.
 - Ảnh chỉ rời khỏi app khi bạn chủ động bấm **Copy** hoặc **Save**.
-- Settings lưu tại `%LOCALAPPDATA%` dưới dạng JSON thuần, chỉ chứa 3 giá trị: màu nền, style, đường dẫn ảnh custom.
+- Settings lưu tại `%LOCALAPPDATA%` dưới dạng JSON thuần, chỉ chứa các tùy chọn giao diện và background.
 - Background image custom chỉ chấp nhận **đường dẫn local tuyệt đối** — chặn UNC path và network path.
 
 **Redact an toàn:**
@@ -89,7 +90,10 @@ Chạy từ source hoặc build thành `.exe` — tùy bạn.
 ## Tính năng
 
 - Chụp màn hình chọn vùng, hỗ trợ multi-monitor
-- **Rect** — khung chữ nhật
+- Chỉnh lại vùng chọn bằng cách kéo, resize rồi bấm **Xác nhận**
+- Khung hướng dẫn tỉ lệ `16:9`, `1:1`, `4:5` và cảnh báo đỏ khi ảnh rộng dưới 300 px
+- Hẹn giờ chụp: không trễ, 3 giây, 5 giây hoặc 10 giây
+- **Rect** — khung chữ nhật, kéo để đổi vị trí sau khi vẽ
 - **Arrow** — mũi tên
 - **Label** — nhãn đánh số
 - **Text** — ghi chú dạng note card, kéo thả và resize được

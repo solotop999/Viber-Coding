@@ -37,6 +37,10 @@ a = Analysis(
         'PyQt6.QtLocation',
         'PyQt6.QtPositioning',
         'PyQt6.QtRemoteObjects',
+        'PIL.AvifImagePlugin',
+        'PIL.ImageCms',
+        'PIL.ImageMath',
+        'PIL.ImageTk',
         'urllib3',
         'http',
         'http.client',
@@ -65,6 +69,41 @@ a = Analysis(
     win_private_assemblies=False,
     cipher=block_cipher,
     noarchive=False,
+)
+
+# Keep only the native image/platform backends used by this Windows app.
+# PNG is built into Qt; JPEG/ICO/WebP and qwindows remain in the bundle.
+_UNUSED_PIL_BINARY_PREFIXES = (
+    '_avif.',
+    '_imagingcms.',
+    '_imagingmath.',
+    '_imagingtk.',
+)
+_UNUSED_QT_BINARY_SUFFIXES = (
+    'plugins\\imageformats\\qgif.dll',
+    'plugins\\imageformats\\qicns.dll',
+    'plugins\\imageformats\\qpdf.dll',
+    'plugins\\imageformats\\qsvg.dll',
+    'plugins\\imageformats\\qtga.dll',
+    'plugins\\imageformats\\qtiff.dll',
+    'plugins\\imageformats\\qwbmp.dll',
+    'plugins\\platforms\\qminimal.dll',
+    'plugins\\platforms\\qoffscreen.dll',
+)
+
+
+def _keep_binary(entry):
+    destination = entry[0].replace('/', '\\').lower()
+    basename = destination.rsplit('\\', 1)[-1]
+    if basename.startswith(_UNUSED_PIL_BINARY_PREFIXES):
+        return False
+    return not destination.endswith(_UNUSED_QT_BINARY_SUFFIXES)
+
+
+a.binaries = type(a.binaries)(
+    entry
+    for entry in a.binaries
+    if _keep_binary(entry)
 )
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)

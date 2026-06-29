@@ -2,7 +2,7 @@
 
 - A Windows screenshot tool: lightweight, fast, and polished.
 - Supports annotations, rounded corners, blurred/color backgrounds to make your content stand out.
-- Automatically optimizes output into common social-media-friendly image layouts for X (Twitter).
+- Includes aspect-ratio guides and small-image warnings for clearer posts on X (Twitter).
 
 100% open source. Runs offline, collects no data, does not track you, does not run in the background, has no ads, and stays clean and transparent.
 
@@ -46,7 +46,8 @@ Output: `dist/capture.exe`
 ## Prebuilt release
 
 - Ready-to-use file: `Solotop Capture.exe`
-- MD5: `49596B9C8540041429FCD4EF0A8005A0`
+- Size: `39,574,513 bytes` (~37.7 MiB)
+- MD5: `D7366A223B1CD948EE0A195B165306E2`
 
 ## Supported platforms
 
@@ -60,11 +61,11 @@ Output: `dist/capture.exe`
 This tool **does not use the network** in its main workflow. There is no server, no account system, no analytics, no crash reporting, and no auto-update.
 
 More specifically:
-- Network-related modules (`socket`, `ssl`, `http`, `urllib`, `PyQt6.QtNetwork`, `PyQt6.QtWebEngine`) are **excluded from the build**. They are not just disabled; they are not included in the final `.exe`.
+- The application code sends no network requests; unused Python network clients and Qt WebEngine are excluded from the build.
 - There is no `eval`, `exec`, `subprocess`, or any mechanism for executing arbitrary external code.
 - No auto-start with Windows. No system tray. No background process.
 - Images only leave the app when you explicitly click **Copy** or **Save**.
-- Settings are stored in `%LOCALAPPDATA%` as a simple JSON file containing only a few values: background color, style, and custom image path.
+- Settings are stored in `%LOCALAPPDATA%` as plain JSON containing only UI and background preferences.
 - Custom background images only accept **absolute local file paths**. UNC paths and network paths are blocked.
 
 **Secure redact:**
@@ -88,7 +89,10 @@ Run it from source or build it into a `.exe`, whichever you prefer.
 ## Features
 
 - Region screenshot capture with multi-monitor support
-- **Rect** - rectangle annotations
+- Move and resize the selected region before pressing **Confirm**
+- `16:9`, `1:1`, and `4:5` guides, plus a red warning below 300 px width
+- Timed capture: no delay, 3 seconds, 5 seconds, or 10 seconds
+- **Rect** - rectangle annotations that can be moved after drawing
 - **Arrow** - directional arrows
 - **Label** - numbered markers
 - **Text** - note-card style text annotations with drag and resize
