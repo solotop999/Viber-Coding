@@ -3,8 +3,8 @@ from __future__ import annotations
 
 from PIL import Image
 from PyQt6.QtCore import QTimer, Qt
-from PyQt6.QtGui import QColor, QPainter, QPixmap
-from PyQt6.QtWidgets import QWidget
+from PyQt6.QtGui import QColor, QFont, QPainter, QPixmap
+from PyQt6.QtWidgets import QLabel, QWidget
 
 from editor.canvas import AnnotationCanvas, _pil_to_qpixmap
 from processing.presentation import (
@@ -32,6 +32,11 @@ class PresentationView(QWidget):
         self._geometry = PresentationGeometry(self._canvas.image_size(), (0, 0))
         self._background = QPixmap()
         self._background_refresh_scheduled = False
+        self._watermark_settings: dict = {}
+        self._watermark = QLabel(self)
+        self._watermark.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self._watermark.setStyleSheet("background: transparent; color: rgba(255,255,255,140);")
+        self._watermark.hide()
         self.setStyleSheet("background: #FFFFFF;")
         self._refresh_view(defer_background=True)
 
@@ -91,6 +96,10 @@ class PresentationView(QWidget):
         self._settings.background_image_path = path
         self._refresh_view()
 
+    def set_watermark_settings(self, settings: dict) -> None:
+        self._watermark_settings = dict(settings)
+        self._refresh_watermark()
+
     def refresh_for_image(self) -> None:
         self._refresh_view(defer_background=True)
 
@@ -129,6 +138,34 @@ class PresentationView(QWidget):
             self._background = QPixmap()
 
         self.update()
+        self._refresh_watermark()
+
+    def _refresh_watermark(self) -> None:
+        text = str(self._watermark_settings.get("text", "")).strip()
+        if not self._watermark_settings.get("enabled") or not text:
+            self._watermark.hide()
+            return
+        available_below = self.height() - (
+            self._geometry.subject_pos[1] + self._canvas.height()
+        )
+        if not self._settings.enabled or available_below < 12:
+            self._watermark.hide()
+            return
+        size = max(8, min(20, round(min(self.width(), self.height()) * 0.02), available_below - 6))
+        opacity = max(10, min(100, int(self._watermark_settings.get("opacity", 55))))
+        self._watermark.setText(text)
+        self._watermark.setFont(QFont("Segoe UI", size, QFont.Weight.Bold))
+        self._watermark.setStyleSheet(
+            f"background: transparent; color: rgba(255,255,255,{round(255 * opacity / 100)});"
+        )
+        self._watermark.adjustSize()
+        margin = max(12, round(min(self.width(), self.height()) * 0.025))
+        bottom_margin = 3
+        x = self.width() - self._watermark.width() - margin
+        y = self.height() - self._watermark.height() - bottom_margin
+        self._watermark.move(max(0, x), max(0, y))
+        self._watermark.show()
+        self._watermark.raise_()
 
     def _schedule_background_refresh(self) -> None:
         if self._background_refresh_scheduled:

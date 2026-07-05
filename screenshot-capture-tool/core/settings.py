@@ -16,6 +16,14 @@ _PRESENTATION_STYLE_KEY = "presentation_background_style"
 _PRESENTATION_COLOR_MODE_KEY = "presentation_background_color_mode"
 _PRESENTATION_GRADIENT_PRESET_KEY = "presentation_background_gradient_preset"
 _PRESENTATION_IMAGE_KEY = "presentation_background_image"
+_WATERMARK_KEY = "watermark"
+
+_DEFAULT_WATERMARK = {
+    "enabled": True,
+    "text": "𝕏: @solotop999",
+    "position": "bottom_right",
+    "opacity": 55,
+}
 
 
 def is_local_background_image_path(path: str | None) -> bool:
@@ -184,6 +192,62 @@ def save_presentation_background_image(path: str | None) -> None:
         data.pop(_PRESENTATION_IMAGE_KEY, None)
 
     payload = json.dumps(data, indent=2)
+    for settings_path in (_preferred_settings_path(), _fallback_settings_path()):
+        try:
+            settings_path.parent.mkdir(parents=True, exist_ok=True)
+            settings_path.write_text(payload, encoding="utf-8")
+            return
+        except OSError:
+            continue
+
+
+def load_watermark_settings() -> dict:
+    """Load and validate the local text-watermark preferences."""
+    raw = _read_settings().get(_WATERMARK_KEY)
+    if not isinstance(raw, dict):
+        return dict(_DEFAULT_WATERMARK)
+
+    text = raw.get("text")
+    if not isinstance(text, str):
+        text = _DEFAULT_WATERMARK["text"]
+    text = text.strip()[:200]
+
+    position = raw.get("position")
+    if position not in {"top_left", "top_right", "bottom_left", "bottom_right"}:
+        position = _DEFAULT_WATERMARK["position"]
+
+    try:
+        opacity = max(10, min(100, int(raw.get("opacity", 55))))
+    except (TypeError, ValueError):
+        opacity = 55
+
+    return {
+        "enabled": bool(raw.get("enabled", True)) and bool(text),
+        "text": text,
+        "position": position,
+        "opacity": opacity,
+    }
+
+
+def save_watermark_settings(settings: dict) -> None:
+    """Persist only validated primitive values; no external resources are loaded."""
+    position = settings.get("position", "bottom_right")
+    if position not in {"top_left", "top_right", "bottom_left", "bottom_right"}:
+        position = "bottom_right"
+    text = str(settings.get("text", "")).strip()[:200]
+    try:
+        opacity = max(10, min(100, int(settings.get("opacity", 55))))
+    except (TypeError, ValueError):
+        opacity = 55
+
+    data = _read_settings()
+    data[_WATERMARK_KEY] = {
+        "enabled": bool(settings.get("enabled", False)) and bool(text),
+        "text": text,
+        "position": position,
+        "opacity": opacity,
+    }
+    payload = json.dumps(data, indent=2, ensure_ascii=False)
     for settings_path in (_preferred_settings_path(), _fallback_settings_path()):
         try:
             settings_path.parent.mkdir(parents=True, exist_ok=True)

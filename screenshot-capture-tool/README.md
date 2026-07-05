@@ -10,6 +10,19 @@
 
 ---
 
+## Đổi watermark
+
+Watermark chữ được bật sẵn với nội dung `𝕏: @solotop999`. Watermark chỉ xuất hiện ở góc phải phía dưới của **Background**, không đè lên nội dung ảnh chụp.
+
+1. Sau khi chụp ảnh, giữ **Background** ở trạng thái bật.
+2. Bấm **Mark** trên thanh công cụ.
+3. Bật hoặc tắt watermark, nhập nội dung mới và chỉnh **Opacity**.
+4. Bấm **Save** trong hộp thoại. Thiết lập được lưu cục bộ cho lần mở sau.
+
+Watermark được áp dụng cho cả **Copy** và **Save**. Khi tắt **Background**, watermark sẽ không xuất hiện.
+
+---
+
 ### Ảnh đẹp ngay khi chụp — sẵn sàng đăng X
 
 Đây là tính năng hay nhất.
@@ -48,8 +61,8 @@ Output: `dist/capture.exe`
 
 - **[⬇️ Tải Solotop Capture cho Windows](https://github.com/solotop999/Viber-Coding/raw/refs/heads/main/screenshot-capture-tool/Solotop%20Capture.exe)**
 - File dùng ngay: `Solotop Capture.exe` — tải về và mở, không cần cài đặt
-- Kích thước: `39,574,513 bytes` (~37.7 MiB)
-- MD5: `D7366A223B1CD948EE0A195B165306E2`
+- Kích thước: `39,496,889 bytes` (~37.7 MiB)
+- MD5: `3F50FD9BFB39D71848EFADFA2DE175C5`
 
 ## Hỗ trợ
 
@@ -103,6 +116,7 @@ Chạy từ source hoặc build thành `.exe` — tùy bạn.
 - **Copy** (`Ctrl+C`) / **Save** (`Ctrl+S`) / **New** (`Ctrl+N`)
 - Toast "Copied" xác nhận copy thành công
 - Lưu lại màu nền và style cho lần mở sau
+- Watermark chữ tùy chỉnh, lưu cục bộ và chỉ nằm trên phần background
 
 ---
 

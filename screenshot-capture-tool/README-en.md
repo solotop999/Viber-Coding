@@ -10,6 +10,19 @@
 
 ---
 
+## Change the watermark
+
+The text watermark is enabled by default as `𝕏: @solotop999`. It appears only in the bottom-right corner of the **Background** and never covers the captured image.
+
+1. After capturing an image, keep **Background** enabled.
+2. Click **Mark** on the toolbar.
+3. Enable or disable the watermark, change its text, and adjust **Opacity**.
+4. Click **Save** in the dialog. The preference is stored locally for future sessions.
+
+The watermark is included in both **Copy** and **Save** output. It is hidden when **Background** is disabled.
+
+---
+
 ### Beautiful screenshots instantly, ready to post on X
 
 This is the standout feature.
@@ -47,8 +60,8 @@ Output: `dist/capture.exe`
 
 - **[⬇️ Download Solotop Capture for Windows](https://github.com/solotop999/Viber-Coding/raw/refs/heads/main/screenshot-capture-tool/Solotop%20Capture.exe)**
 - Ready-to-use file: `Solotop Capture.exe` — download and run, no installation required
-- Size: `39,574,513 bytes` (~37.7 MiB)
-- MD5: `D7366A223B1CD948EE0A195B165306E2`
+- Size: `39,496,889 bytes` (~37.7 MiB)
+- MD5: `3F50FD9BFB39D71848EFADFA2DE175C5`
 
 ## Supported platforms
 
@@ -102,6 +115,7 @@ Run it from source or build it into a `.exe`, whichever you prefer.
 - **Copy** (`Ctrl+C`) / **Save** (`Ctrl+S`) / **New** (`Ctrl+N`)
 - “Copied” toast to confirm clipboard success
 - Remembers background color and style for the next app launch
+- Custom text watermark stored locally and restricted to the background area
 
 ---
 

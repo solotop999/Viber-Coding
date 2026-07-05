@@ -30,11 +30,14 @@ from core.settings import (
     load_presentation_background_gradient_preset,
     load_presentation_background_image,
     load_presentation_background_style,
+    load_watermark_settings,
 )
 from editor.canvas import AnnotationCanvas
 from editor.presentation_view import PresentationView
 from editor.toolbar import Toolbar
 from processing.presentation import PresentationSettings
+from processing.presentation import compute_presentation_geometry
+from processing.watermark import apply_text_watermark
 
 
 def _desktop_dir() -> Path:
@@ -72,6 +75,7 @@ class EditorWindow(QWidget):
         self._presentation_gradient_preset = load_presentation_background_gradient_preset()
         self._presentation_style = load_presentation_background_style()
         self._presentation_background_image = load_presentation_background_image()
+        self._watermark_settings = load_watermark_settings()
         if self._presentation_background_image and (
             not is_local_background_image_path(self._presentation_background_image)
             or not Path(self._presentation_background_image).exists()
@@ -93,6 +97,7 @@ class EditorWindow(QWidget):
                 background_image_path=self._presentation_background_image,
             ),
         )
+        self._presentation_view.set_watermark_settings(self._watermark_settings)
         self._toolbar = Toolbar(
             self._canvas,
             self,
@@ -101,6 +106,7 @@ class EditorWindow(QWidget):
             self._presentation_gradient_preset,
             self._presentation_style,
             self._presentation_background_image,
+            self._watermark_settings,
         )
         self._toolbar.setMinimumWidth(self._toolbar.sizeHint().width())
         self._install_shortcuts()
@@ -259,7 +265,9 @@ class EditorWindow(QWidget):
 
         self._canvas.commit_active_tool()
         try:
-            copy_to_clipboard(self._canvas.flatten_to_pil(self._presentation_view.settings()))
+            settings = self._presentation_view.settings()
+            image = self._canvas.flatten_to_pil(settings)
+            copy_to_clipboard(self._apply_watermark(image, settings))
             self._status.setText("  Copied to clipboard!")
             self._show_copy_toast()
         except Exception as exc:
@@ -284,7 +292,7 @@ class EditorWindow(QWidget):
 
         try:
             settings = self._presentation_view.settings()
-            image = self._canvas.flatten_to_pil(settings)
+            image = self._apply_watermark(self._canvas.flatten_to_pil(settings), settings)
             if save_path.suffix.lower() in {".jpg", ".jpeg"}:
                 if settings.enabled:
                     image.convert("RGB").save(save_path, quality=95)
@@ -355,6 +363,23 @@ class EditorWindow(QWidget):
         self._canvas.commit_active_tool()
         self._presentation_background_image = path
         self._presentation_view.set_background_image_path(path)
+
+    def set_watermark_settings(self, settings: dict) -> None:
+        self._canvas.commit_active_tool()
+        self._watermark_settings = dict(settings)
+        self._presentation_view.set_watermark_settings(settings)
+
+    def _apply_watermark(
+        self, image: Image.Image, settings: PresentationSettings
+    ) -> Image.Image:
+        if not settings.enabled:
+            return image
+        geometry = compute_presentation_geometry(self._canvas.image_size(), settings)
+        x, y = geometry.subject_pos
+        width, height = self._canvas.image_size()
+        return apply_text_watermark(
+            image, self._watermark_settings, (x, y, width, height)
+        )
 
     def closeEvent(self, event: QCloseEvent) -> None:
         self._canvas.cancel_active_tool()

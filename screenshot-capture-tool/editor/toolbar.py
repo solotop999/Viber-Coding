@@ -10,13 +10,19 @@ from PyQt6.QtWidgets import (
     QApplication,
     QButtonGroup,
     QComboBox,
+    QCheckBox,
     QColorDialog,
     QFileDialog,
+    QDialog,
+    QDialogButtonBox,
+    QFormLayout,
     QFrame,
     QGridLayout,
     QHBoxLayout,
+    QLineEdit,
     QMenu,
     QMessageBox,
+    QSlider,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -30,6 +36,7 @@ from core.settings import (
     save_presentation_background_gradient_preset,
     save_presentation_background_image,
     save_presentation_background_style,
+    save_watermark_settings,
 )
 from editor.canvas import (
     AnnotationCanvas,
@@ -428,6 +435,7 @@ class Toolbar(QWidget):
         presentation_gradient_preset: str,
         presentation_style: str,
         background_image_path: str | None,
+        watermark_settings: dict,
     ) -> None:
         super().__init__()
         self._canvas = canvas
@@ -448,6 +456,7 @@ class Toolbar(QWidget):
             else "color"
         )
         self._background_image_path = background_image_path
+        self._watermark_settings = dict(watermark_settings)
 
         self.setFixedHeight(_RIBBON_H)
         self.setStyleSheet("QWidget { background: #F3F3F3; }")
@@ -605,6 +614,9 @@ class Toolbar(QWidget):
         save_btn = _ActionBtn("save", "Save", "Save to file  Ctrl+S")
         save_btn.clicked.connect(self._editor.save_image)
 
+        watermark_btn = _ActionBtn("text", "Mark", "Watermark settings")
+        watermark_btn.clicked.connect(self._open_watermark_settings)
+
         x_btn = QToolButton()
         x_btn.setFixedSize(_BTN_W, _BTN_H)
         x_btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon)
@@ -630,11 +642,51 @@ class Toolbar(QWidget):
             }
         """)
 
-        for button in (undo_btn, clear_btn, copy_btn, save_btn, x_btn):
+        for button in (undo_btn, clear_btn, watermark_btn, copy_btn, save_btn, x_btn):
             row.addWidget(button)
 
         vbox.addLayout(row)
         return vbox
+
+    def _open_watermark_settings(self) -> None:
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Watermark")
+        dialog.setMinimumWidth(360)
+        form = QFormLayout(dialog)
+
+        enabled = QCheckBox("Add watermark when copying or saving")
+        enabled.setChecked(bool(self._watermark_settings.get("enabled", False)))
+        text = QLineEdit(str(self._watermark_settings.get("text", "𝕏: @solotop999")))
+        text.setMaxLength(200)
+        opacity = QSlider(Qt.Orientation.Horizontal)
+        opacity.setRange(10, 100)
+        opacity.setValue(int(self._watermark_settings.get("opacity", 55)))
+        opacity.setTickInterval(10)
+
+        form.addRow(enabled)
+        form.addRow("Text", text)
+        form.addRow("Opacity", opacity)
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        form.addRow(buttons)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        value = {
+            "enabled": enabled.isChecked(),
+            "text": text.text().strip(),
+            "position": "bottom_right",
+            "opacity": opacity.value(),
+        }
+        if value["enabled"] and not value["text"]:
+            QMessageBox.warning(self, "Watermark", "Please enter watermark text.")
+            return
+        self._watermark_settings = value
+        save_watermark_settings(value)
+        self._editor.set_watermark_settings(value)
 
     def _presentation_group(self) -> QVBoxLayout:
         vbox = QVBoxLayout()
