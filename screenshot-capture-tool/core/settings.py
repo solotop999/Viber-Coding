@@ -17,6 +17,8 @@ _PRESENTATION_COLOR_MODE_KEY = "presentation_background_color_mode"
 _PRESENTATION_GRADIENT_PRESET_KEY = "presentation_background_gradient_preset"
 _PRESENTATION_IMAGE_KEY = "presentation_background_image"
 _WATERMARK_KEY = "watermark"
+_ICON_VISIBLE_KEY = "icon_visible"
+_ICON_SIZE_KEY = "icon_size"
 
 _DEFAULT_WATERMARK = {
     "enabled": True,
@@ -200,6 +202,47 @@ def save_presentation_background_image(path: str | None) -> None:
         except OSError:
             continue
 
+
+def load_icon_size() -> int:
+    """Return the saved longest edge of the image icon in pixels."""
+    raw = _read_settings().get(_ICON_SIZE_KEY, 77)
+    try:
+        return max(24, min(4096, int(raw)))
+    except (TypeError, ValueError):
+        return 77
+
+
+def save_icon_size(size: int) -> None:
+    """Persist the validated longest edge of the image icon."""
+    data = _read_settings()
+    data[_ICON_SIZE_KEY] = max(24, min(4096, int(size)))
+    payload = json.dumps(data, indent=2, ensure_ascii=False)
+    for settings_path in (_preferred_settings_path(), _fallback_settings_path()):
+        try:
+            settings_path.parent.mkdir(parents=True, exist_ok=True)
+            settings_path.write_text(payload, encoding="utf-8")
+            return
+        except OSError:
+            continue
+
+def load_icon_visible() -> bool:
+    """Return whether the image icon should be shown."""
+    raw = _read_settings().get(_ICON_VISIBLE_KEY, True)
+    return raw if isinstance(raw, bool) else True
+
+
+def save_icon_visible(visible: bool) -> None:
+    """Persist the image-icon visibility preference."""
+    data = _read_settings()
+    data[_ICON_VISIBLE_KEY] = bool(visible)
+    payload = json.dumps(data, indent=2, ensure_ascii=False)
+    for settings_path in (_preferred_settings_path(), _fallback_settings_path()):
+        try:
+            settings_path.parent.mkdir(parents=True, exist_ok=True)
+            settings_path.write_text(payload, encoding="utf-8")
+            return
+        except OSError:
+            continue
 
 def load_watermark_settings() -> dict:
     """Load and validate the local text-watermark preferences."""

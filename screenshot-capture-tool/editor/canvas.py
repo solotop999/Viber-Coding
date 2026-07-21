@@ -32,6 +32,7 @@ _RENDER_MAP = {
 }
 
 TOOL_ARROW = "arrow"
+TOOL_ICON = "icon"
 TOOL_LABEL = "label"
 TOOL_RECT = "rect"
 TOOL_TEXT = "text"

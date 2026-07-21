@@ -39,9 +39,11 @@ def apply_text_watermark(
 
 
 def _load_font(size: int):
-    # Arial is available on supported Windows installations. Pillow's bundled
-    # fallback keeps export working if the system font is unavailable.
-    try:
-        return ImageFont.truetype("arialbd.ttf", size)
-    except OSError:
-        return ImageFont.load_default(size=size)
+    # Arial Bold does not contain Mathematical Alphanumeric Symbols such as
+    # U+1D54F (𝕏). Segoe UI Symbol keeps those glyphs intact in Copy/Save.
+    for name in ("seguisym.ttf", "cambria.ttc", "arialbd.ttf"):
+        try:
+            return ImageFont.truetype(name, size)
+        except OSError:
+            continue
+    return ImageFont.load_default(size=size)

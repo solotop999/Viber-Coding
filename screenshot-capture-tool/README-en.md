@@ -23,6 +23,18 @@ The watermark is included in both **Copy** and **Save** output. It is hidden whe
 
 ---
 
+## Add an icon to the image
+
+After each capture, assets/icon.png is added automatically in the bottom-left corner of the final image.
+
+- Drag the icon anywhere, including the **Background** outside the screenshot.
+- Drag the top-right handle to resize it while preserving its aspect ratio.
+- Click the **Icon** toolbar button to show or hide it.
+- Visibility is remembered for future captures and app launches.
+- The current icon size is remembered when you click **Copy**; its default position remains bottom-left.
+- The icon is included in both **Copy** and **Save** output.
+
+---
 ### Beautiful screenshots instantly, ready to post on X
 
 This is the standout feature.
@@ -51,7 +63,7 @@ python main.py
 ## Build the `.exe`
 
 ```bash
-pyinstaller --clean --noconfirm build.spec
+python -m PyInstaller --clean --noconfirm build.spec
 ```
 
 Output: `dist/capture.exe`
@@ -60,8 +72,9 @@ Output: `dist/capture.exe`
 
 - **[⬇️ Download Solotop Capture for Windows](https://github.com/solotop999/Viber-Coding/raw/refs/heads/main/screenshot-capture-tool/Solotop%20Capture.exe)**
 - Ready-to-use file: `Solotop Capture.exe` — download and run, no installation required
-- Size: `39,496,889 bytes` (~37.7 MiB)
-- MD5: `3F50FD9BFB39D71848EFADFA2DE175C5`
+- Size: `39,617,170 bytes` (~37.8 MiB)
+- MD5: `5520A9580333D37ED427C744B5906C91`
+- SHA-256: `73FD1FFAF5747FC4B44637E5F00AF0F03D67076AB85E93384FA017E1C0DDD73A`
 
 ## Supported platforms
 
@@ -111,6 +124,7 @@ Run it from source or build it into a `.exe`, whichever you prefer.
 - **Label** - numbered markers
 - **Text** - note-card style text annotations with drag and resize
 - **Redact** - secure solid-fill redaction that cannot be visually recovered from exported output
+- **Icon** - draggable and resizable overlay across the image and background, with a persistent visibility toggle
 - **Undo** / **Clear**
 - **Copy** (`Ctrl+C`) / **Save** (`Ctrl+S`) / **New** (`Ctrl+N`)
 - “Copied” toast to confirm clipboard success

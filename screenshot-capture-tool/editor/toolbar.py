@@ -41,6 +41,7 @@ from core.settings import (
 from editor.canvas import (
     AnnotationCanvas,
     TOOL_ARROW,
+    TOOL_ICON,
     TOOL_LABEL,
     TOOL_RECT,
     TOOL_REDACT,
@@ -149,6 +150,20 @@ def _make_tool_icon(symbol: str, size: int = 28) -> QIcon:
                 painter.setBrush(QBrush(QColor(shade, shade, shade)))
                 painter.setPen(QPen(QColor("white"), 1))
                 painter.drawRect(margin + col * square, margin + row * square, square - 1, square - 1)
+    elif symbol == "icon":
+        icon_pixmap = QPixmap(str(asset_path("icon.png")))
+        if not icon_pixmap.isNull():
+            scaled = icon_pixmap.scaled(
+                size - margin * 2,
+                size - margin * 2,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+            painter.drawPixmap(
+                (size - scaled.width()) // 2,
+                (size - scaled.height()) // 2,
+                scaled,
+            )
     elif symbol == "new":
         pen2 = QPen(color, 2.5)
         pen2.setCapStyle(Qt.PenCapStyle.RoundCap)
@@ -533,16 +548,21 @@ class Toolbar(QWidget):
             (TOOL_RECT, "rect", "Rect", "Rectangle"),
             (TOOL_ARROW, "arrow", "Arrow", "Arrow"),
             (TOOL_LABEL, "label", "Label", "Numbered Label"),
+            (TOOL_ICON, "icon", "Icon", "Insert Icon"),
             (TOOL_TEXT, "text", "Text", "Add Text"),
             (TOOL_REDACT, "redact", "Redact", "Blur / Redact"),
         ]
         for tool_name, symbol, label, tooltip in tools:
             button = _ToolBtn(symbol, label, tooltip)
-            if tool_name == TOOL_TEXT:
-                button.clicked.connect(self._on_text_btn_clicked)
+            if tool_name == TOOL_ICON:
+                button.setChecked(True)
+                button.clicked.connect(self._on_icon_toggle)
             else:
-                button.clicked.connect(lambda _, name=tool_name: self._on_tool_clicked(name))
-            self._btn_group.addButton(button)
+                if tool_name == TOOL_TEXT:
+                    button.clicked.connect(self._on_text_btn_clicked)
+                else:
+                    button.clicked.connect(lambda _, name=tool_name: self._on_tool_clicked(name))
+                self._btn_group.addButton(button)
             self._tool_btns[tool_name] = button
             row.addWidget(button)
 
@@ -551,6 +571,12 @@ class Toolbar(QWidget):
 
         vbox.addLayout(row)
         return vbox
+
+    def _on_icon_toggle(self, checked: bool) -> None:
+        self._editor.set_icon_visible(checked)
+
+    def set_icon_visible_state(self, visible: bool) -> None:
+        self._tool_btns[TOOL_ICON].setChecked(visible)
 
     def _on_tool_clicked(self, name: str) -> None:
         self._text_popup.hide()

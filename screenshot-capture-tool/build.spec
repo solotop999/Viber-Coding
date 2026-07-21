@@ -13,6 +13,7 @@ _ASSET_FILES = [
     (_ASSET_DIR / 'bg3.jpg', 'assets'),
     (_ASSET_DIR / 'logo.jpg', 'assets'),
     (_ASSET_DIR / 'x_icon.jpg', 'assets'),
+    (_ASSET_DIR / 'icon.png', 'assets'),
 ]
 _ICON_FILE = _ASSET_DIR / 'logo.ico'
 

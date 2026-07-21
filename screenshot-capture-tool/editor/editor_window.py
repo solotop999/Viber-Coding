@@ -25,12 +25,16 @@ from PyQt6.QtWidgets import (
 from core.clipboard import copy_to_clipboard
 from core.settings import (
     is_local_background_image_path,
+    load_icon_size,
+    load_icon_visible,
     load_presentation_background_color,
     load_presentation_background_color_mode,
     load_presentation_background_gradient_preset,
     load_presentation_background_image,
     load_presentation_background_style,
     load_watermark_settings,
+    save_icon_size,
+    save_icon_visible,
 )
 from editor.canvas import AnnotationCanvas
 from editor.presentation_view import PresentationView
@@ -76,6 +80,8 @@ class EditorWindow(QWidget):
         self._presentation_style = load_presentation_background_style()
         self._presentation_background_image = load_presentation_background_image()
         self._watermark_settings = load_watermark_settings()
+        self._icon_visible = load_icon_visible()
+        self._icon_size = load_icon_size()
         if self._presentation_background_image and (
             not is_local_background_image_path(self._presentation_background_image)
             or not Path(self._presentation_background_image).exists()
@@ -98,6 +104,8 @@ class EditorWindow(QWidget):
             ),
         )
         self._presentation_view.set_watermark_settings(self._watermark_settings)
+        self._presentation_view.set_icon_default_extent(self._icon_size, reset=True)
+        self._presentation_view.set_icon_visible(self._icon_visible)
         self._toolbar = Toolbar(
             self._canvas,
             self,
@@ -108,6 +116,7 @@ class EditorWindow(QWidget):
             self._presentation_background_image,
             self._watermark_settings,
         )
+        self._toolbar.set_icon_visible_state(self._icon_visible)
         self._toolbar.setMinimumWidth(self._toolbar.sizeHint().width())
         self._install_shortcuts()
 
@@ -267,7 +276,11 @@ class EditorWindow(QWidget):
         try:
             settings = self._presentation_view.settings()
             image = self._canvas.flatten_to_pil(settings)
+            image = self._presentation_view.apply_icon_overlay(image)
             copy_to_clipboard(self._apply_watermark(image, settings))
+            self._icon_size = self._presentation_view.icon_extent()
+            self._presentation_view.set_icon_default_extent(self._icon_size)
+            save_icon_size(self._icon_size)
             self._status.setText("  Copied to clipboard!")
             self._show_copy_toast()
         except Exception as exc:
@@ -292,7 +305,9 @@ class EditorWindow(QWidget):
 
         try:
             settings = self._presentation_view.settings()
-            image = self._apply_watermark(self._canvas.flatten_to_pil(settings), settings)
+            image = self._canvas.flatten_to_pil(settings)
+            image = self._presentation_view.apply_icon_overlay(image)
+            image = self._apply_watermark(image, settings)
             if save_path.suffix.lower() in {".jpg", ".jpeg"}:
                 if settings.enabled:
                     image.convert("RGB").save(save_path, quality=95)
@@ -320,10 +335,18 @@ class EditorWindow(QWidget):
         self._canvas.clear()
         self._status.setText("  Cleared annotations")
 
+    def set_icon_visible(self, visible: bool) -> None:
+        self._icon_visible = bool(visible)
+        self._presentation_view.set_icon_visible(self._icon_visible)
+        save_icon_visible(self._icon_visible)
+        self._status.setText("  Icon enabled" if self._icon_visible else "  Icon hidden")
+
     def update_image(self, pil_image: Image.Image) -> None:
         self._canvas.cancel_active_tool()
         self._canvas.set_image(pil_image)
         self._presentation_view.refresh_for_image()
+        self._presentation_view.set_icon_visible(self._icon_visible)
+        self._toolbar.set_icon_visible_state(self._icon_visible)
         self._resize_to_content()
         self._set_image_status(pil_image.size)
 

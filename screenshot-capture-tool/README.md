@@ -23,6 +23,18 @@ Watermark được áp dụng cho cả **Copy** và **Save**. Khi tắt **Backgr
 
 ---
 
+## Chèn icon vào ảnh
+
+Sau khi chụp, assets/icon.png được thêm tự động ở góc dưới bên trái của ảnh đầu ra.
+
+- Kéo icon đến bất kỳ vị trí nào, kể cả phần **Background** bên ngoài screenshot.
+- Kéo tay nắm ở góc trên bên phải để phóng to hoặc thu nhỏ mà không làm méo ảnh.
+- Bấm nút **Icon** trên toolbar để bật hoặc tắt icon.
+- Trạng thái bật/tắt được lưu cho lần capture và lần mở ứng dụng tiếp theo.
+- Kích thước icon hiện tại được ghi nhớ khi bấm **Copy**; vị trí mặc định vẫn là góc dưới bên trái.
+- Icon được áp dụng cho cả **Copy** và **Save**.
+
+---
 ### Ảnh đẹp ngay khi chụp — sẵn sàng đăng X
 
 Đây là tính năng hay nhất.
@@ -52,7 +64,7 @@ python main.py
 ## Build `.exe`
 
 ```bash
-pyinstaller --clean --noconfirm build.spec
+python -m PyInstaller --clean --noconfirm build.spec
 ```
 
 Output: `dist/capture.exe`
@@ -61,8 +73,9 @@ Output: `dist/capture.exe`
 
 - **[⬇️ Tải Solotop Capture cho Windows](https://github.com/solotop999/Viber-Coding/raw/refs/heads/main/screenshot-capture-tool/Solotop%20Capture.exe)**
 - File dùng ngay: `Solotop Capture.exe` — tải về và mở, không cần cài đặt
-- Kích thước: `39,496,889 bytes` (~37.7 MiB)
-- MD5: `3F50FD9BFB39D71848EFADFA2DE175C5`
+- Kích thước: `39,617,170 bytes` (~37.8 MiB)
+- MD5: `5520A9580333D37ED427C744B5906C91`
+- SHA-256: `73FD1FFAF5747FC4B44637E5F00AF0F03D67076AB85E93384FA017E1C0DDD73A`
 
 ## Hỗ trợ
 
@@ -112,6 +125,7 @@ Chạy từ source hoặc build thành `.exe` — tùy bạn.
 - **Label** — nhãn đánh số
 - **Text** — ghi chú dạng note card, kéo thả và resize được
 - **Redact** — che thông tin, solid fill không khôi phục được
+- **Icon** — overlay kéo/resize trên toàn ảnh và background, có nút bật/tắt và lưu thiết lập
 - **Undo** / **Clear**
 - **Copy** (`Ctrl+C`) / **Save** (`Ctrl+S`) / **New** (`Ctrl+N`)
 - Toast "Copied" xác nhận copy thành công
