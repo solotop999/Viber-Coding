@@ -12,7 +12,7 @@ import io
 
 from PIL import Image
 from PyQt6.QtCore import QPointF, QRectF, Qt
-from PyQt6.QtGui import QColor, QImage, QPainter, QPixmap
+from PyQt6.QtGui import QBrush, QColor, QImage, QLinearGradient, QPainter, QPen, QPixmap
 from PyQt6.QtWidgets import QGraphicsDropShadowEffect, QWidget
 
 from editor.tools.arrow_tool import ArrowTool, render_arrow
@@ -21,6 +21,7 @@ from editor.tools.label_tool import LabelTool, render_label
 from editor.tools.rect_tool import RectTool, render_rect
 from editor.tools.redact_tool import RedactTool, render_redact
 from editor.tools.text_tool import TextTool, render_text
+from processing.corners import rounded_corner_radius
 from processing.presentation import PresentationSettings, compose_presentation
 
 _RENDER_MAP = {
@@ -82,6 +83,7 @@ class AnnotationCanvas(QWidget):
         shadow.setOffset(0, 8)
         shadow.setColor(QColor(6, 10, 18, 92))
         self._shadow = shadow
+        self._neon_frame_enabled = True
         self.setGraphicsEffect(self._shadow)
         self.set_shadow_enabled(True)
 
@@ -103,6 +105,8 @@ class AnnotationCanvas(QWidget):
         self.update()
 
     def set_shadow_enabled(self, enabled: bool) -> None:
+        self._neon_frame_enabled = enabled
+        self.update()
         if enabled:
             self._shadow.setBlurRadius(18)
             self._shadow.setOffset(0, 8)
@@ -279,6 +283,25 @@ class AnnotationCanvas(QWidget):
                 renderer(painter, ann)
 
         self._tool.draw_preview(painter)
+        if self._neon_frame_enabled:
+            self._draw_neon_core(painter)
+
+    def _draw_neon_core(self, painter: QPainter) -> None:
+        """Paint the crisp neon tube above the screenshot preview."""
+        frame = QRectF(self.rect()).adjusted(1.4, 1.4, -1.4, -1.4)
+        radius = max(1.0, rounded_corner_radius(self.image_size()) - 1.4)
+        gradient = QLinearGradient(frame.left(), 0, frame.right(), 0)
+        gradient.setColorAt(0.0, QColor(122, 220, 255))
+        gradient.setColorAt(0.48, QColor(159, 168, 255))
+        gradient.setColorAt(1.0, QColor(242, 142, 255))
+
+        painter.save()
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.setPen(QPen(QBrush(gradient), 3.0, Qt.PenStyle.SolidLine))
+        painter.drawRoundedRect(frame, radius, radius)
+        painter.setPen(QPen(QColor(245, 251, 255, 205), 1.0, Qt.PenStyle.SolidLine))
+        painter.drawRoundedRect(frame, radius, radius)
+        painter.restore()
 
     def _make_tool(self, name: str) -> BaseTool:
         if name == TOOL_ARROW:

@@ -13,6 +13,7 @@ from processing.presentation import (
     PresentationSettings,
     compute_presentation_geometry,
     render_background,
+    render_neon_frame,
 )
 
 
@@ -382,6 +383,14 @@ class PresentationView(QWidget):
         )
         if preview_size != self._geometry.canvas_size:
             bg = bg.resize(self._geometry.canvas_size, Image.Resampling.LANCZOS)
+        glow, core = render_neon_frame(
+            self._geometry.canvas_size,
+            self._geometry.subject_pos,
+            self._canvas.image_size(),
+        )
+        bg = bg.convert("RGBA")
+        bg.alpha_composite(glow)
+        bg.alpha_composite(core)
         self._background = _pil_to_qpixmap(bg)
 
     def _preview_render_size(self, canvas_size: tuple[int, int]) -> tuple[int, int]:

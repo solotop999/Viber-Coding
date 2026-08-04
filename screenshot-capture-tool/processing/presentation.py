@@ -7,10 +7,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-from PIL import Image, ImageEnhance, ImageFilter, ImageOps
+from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageOps
 
 from core.paths import asset_path
 from core.settings import is_local_background_image_path
+from processing.corners import rounded_corner_radius
 
 PresentationLayout = Literal["fit", "wide", "post", "phone"]
 PresentationStyle = Literal["color", "image1", "image2", "image3", "custom"]
@@ -164,9 +165,94 @@ def compose_presentation(
     ).convert("RGBA")
 
     shadow = _render_shadow(subject.getchannel("A"), geometry.canvas_size, geometry.subject_pos)
+    neon_glow, neon_core = render_neon_frame(
+        geometry.canvas_size,
+        geometry.subject_pos,
+        subject.size,
+    )
     background.alpha_composite(shadow)
+    background.alpha_composite(neon_glow)
     background.alpha_composite(subject, geometry.subject_pos)
+    background.alpha_composite(neon_core)
     return background
+
+
+def render_neon_frame(
+    canvas_size: tuple[int, int],
+    subject_pos: tuple[int, int],
+    subject_size: tuple[int, int],
+) -> tuple[Image.Image, Image.Image]:
+    """Return separate glow and crisp border layers for a screenshot."""
+    canvas_width, canvas_height = canvas_size
+    x, y = subject_pos
+    width, height = subject_size
+    empty = Image.new("RGBA", canvas_size, (0, 0, 0, 0))
+    if width < 4 or height < 4:
+        return empty, empty.copy()
+
+    stroke = max(3, round(min(width, height) * 0.004))
+    radius = rounded_corner_radius(subject_size)
+    box = (x, y, x + width - 1, y + height - 1)
+
+    ring_mask = Image.new("L", canvas_size, 0)
+    ImageDraw.Draw(ring_mask).rounded_rectangle(
+        box,
+        radius=radius,
+        outline=255,
+        width=stroke,
+    )
+
+    gradient = Image.new("RGBA", (canvas_width, 1))
+    pixels = gradient.load()
+    left = (76, 190, 255)
+    middle = (112, 111, 255)
+    right = (218, 72, 255)
+    midpoint = max(1, canvas_width // 2)
+    for px in range(canvas_width):
+        if px <= midpoint:
+            color = _blend_rgb(left, middle, px / midpoint)
+        else:
+            color = _blend_rgb(middle, right, (px - midpoint) / max(1, canvas_width - 1 - midpoint))
+        pixels[px, 0] = (*color, 255)
+    gradient = gradient.resize(canvas_size)
+
+    # Build the bloom from wider source bands. Blurring the thin core directly
+    # makes the halo disappear on detailed backgrounds.
+    scale = min(width, height)
+    tight_width = max(5, round(scale * 0.012))
+    broad_width = max(11, round(scale * 0.026))
+    tight_source = Image.new("L", canvas_size, 0)
+    broad_source = Image.new("L", canvas_size, 0)
+    ImageDraw.Draw(tight_source).rounded_rectangle(
+        box,
+        radius=radius,
+        outline=255,
+        width=tight_width,
+    )
+    ImageDraw.Draw(broad_source).rounded_rectangle(
+        box,
+        radius=radius,
+        outline=220,
+        width=broad_width,
+    )
+
+    broad_blur = min(22, max(10, round(scale * 0.030)))
+    tight_blur = min(10, max(4, round(scale * 0.012)))
+    broad_mask = broad_source.filter(ImageFilter.GaussianBlur(broad_blur))
+    tight_mask = tight_source.filter(ImageFilter.GaussianBlur(tight_blur))
+
+    broad_glow = gradient.copy()
+    broad_glow.putalpha(broad_mask.point(lambda value: min(255, round(value * 1.05))))
+    tight_glow = gradient.copy()
+    tight_glow.putalpha(tight_mask.point(lambda value: min(255, round(value * 1.18))))
+    glow = Image.alpha_composite(broad_glow, tight_glow)
+
+    core = gradient.copy()
+    core.putalpha(ring_mask)
+    highlight = Image.new("RGBA", canvas_size, (245, 251, 255, 0))
+    highlight.putalpha(ring_mask.point(lambda value: round(value * 0.68)))
+    core = Image.alpha_composite(core, highlight)
+    return glow, core
 
 
 def _flatten_source(img: Image.Image) -> Image.Image:

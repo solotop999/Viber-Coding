@@ -4,6 +4,11 @@ from __future__ import annotations
 from PIL import Image, ImageChops, ImageDraw
 
 
+def rounded_corner_radius(size: tuple[int, int]) -> int:
+    """Return the shared corner radius used by the image and its frame."""
+    return min(14, max(6, round(min(size) * 0.08)))
+
+
 def apply_rounded_corners(
     img: Image.Image,
     radius: int | None = None,
@@ -19,7 +24,7 @@ def apply_rounded_corners(
     img = img.convert("RGBA")
     w, h = img.size
     if radius is None:
-        radius = min(14, max(6, round(min(w, h) * 0.08)))
+        radius = rounded_corner_radius((w, h))
 
     scale = 4
     big = Image.new("L", (w * scale, h * scale), 0)
