@@ -12,7 +12,7 @@ import io
 
 from PIL import Image
 from PyQt6.QtCore import QPointF, QRectF, Qt
-from PyQt6.QtGui import QBrush, QColor, QImage, QLinearGradient, QPainter, QPen, QPixmap
+from PyQt6.QtGui import QColor, QImage, QPainter, QPixmap
 from PyQt6.QtWidgets import QGraphicsDropShadowEffect, QWidget
 
 from editor.tools.arrow_tool import ArrowTool, render_arrow
@@ -21,8 +21,7 @@ from editor.tools.label_tool import LabelTool, render_label
 from editor.tools.rect_tool import RectTool, render_rect
 from editor.tools.redact_tool import RedactTool, render_redact
 from editor.tools.text_tool import TextTool, render_text
-from processing.corners import rounded_corner_radius
-from processing.presentation import PresentationSettings, compose_presentation
+from processing.presentation import PresentationSettings, compose_presentation, render_neon_frame
 
 _RENDER_MAP = {
     "arrow": render_arrow,
@@ -60,6 +59,7 @@ class AnnotationCanvas(QWidget):
         super().__init__(parent)
         self._pil_image = pil_image
         self._pixmap = _pil_to_qpixmap(pil_image)
+        self._neon_overlay_pixmap = QPixmap()
         self.setFixedSize(self._pixmap.size())
 
         self._annotations: list[Annotation] = []
@@ -99,6 +99,7 @@ class AnnotationCanvas(QWidget):
         self._annotations.clear()
         self._undo_stack.clear()
         self._pixmap = _pil_to_qpixmap(pil_image)
+        self._neon_overlay_pixmap = QPixmap()
         self.setFixedSize(self._pixmap.size())
         if isinstance(self._tool, LabelTool):
             self._tool.reset_counter()
@@ -287,21 +288,15 @@ class AnnotationCanvas(QWidget):
             self._draw_neon_core(painter)
 
     def _draw_neon_core(self, painter: QPainter) -> None:
-        """Paint the crisp neon tube above the screenshot preview."""
-        frame = QRectF(self.rect()).adjusted(1.4, 1.4, -1.4, -1.4)
-        radius = max(1.0, rounded_corner_radius(self.image_size()) - 1.4)
-        gradient = QLinearGradient(frame.left(), 0, frame.right(), 0)
-        gradient.setColorAt(0.0, QColor(122, 220, 255))
-        gradient.setColorAt(0.48, QColor(159, 168, 255))
-        gradient.setColorAt(1.0, QColor(242, 142, 255))
-
-        painter.save()
-        painter.setBrush(Qt.BrushStyle.NoBrush)
-        painter.setPen(QPen(QBrush(gradient), 3.0, Qt.PenStyle.SolidLine))
-        painter.drawRoundedRect(frame, radius, radius)
-        painter.setPen(QPen(QColor(245, 251, 255, 205), 1.0, Qt.PenStyle.SolidLine))
-        painter.drawRoundedRect(frame, radius, radius)
-        painter.restore()
+        """Paint the same softly blurred inner neon layer used by export."""
+        if self._neon_overlay_pixmap.isNull():
+            _, overlay = render_neon_frame(
+                self.image_size(),
+                (0, 0),
+                self.image_size(),
+            )
+            self._neon_overlay_pixmap = _pil_to_qpixmap(overlay)
+        painter.drawPixmap(0, 0, self._neon_overlay_pixmap)
 
     def _make_tool(self, name: str) -> BaseTool:
         if name == TOOL_ARROW:

@@ -13,7 +13,6 @@ from __future__ import annotations
 import ctypes
 import os
 import sys
-from pathlib import Path
 
 os.environ["QT_NETWORK_PROXY_AUTOCONF"] = "0"
 os.environ["QT_NO_GLIB"] = "1"

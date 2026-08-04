@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from functools import lru_cache
-from pathlib import Path
 
 from PyQt6.QtCore import QEvent, QPoint, QRect, QSize, Qt, QUrl
 from PyQt6.QtGui import QBrush, QColor, QDesktopServices, QFont, QIcon, QPainter, QPen, QPixmap

@@ -41,7 +41,7 @@ from editor.presentation_view import PresentationView
 from editor.toolbar import Toolbar
 from processing.presentation import PresentationSettings
 from processing.presentation import compute_presentation_geometry
-from processing.watermark import apply_text_watermark
+from processing.watermark import apply_background_watermark, apply_text_watermark
 
 
 def _desktop_dir() -> Path:
@@ -400,8 +400,12 @@ class EditorWindow(QWidget):
         geometry = compute_presentation_geometry(self._canvas.image_size(), settings)
         x, y = geometry.subject_pos
         width, height = self._canvas.image_size()
+        subject_box = (x, y, width, height)
+        image = apply_background_watermark(
+            image, self._watermark_settings, subject_box
+        )
         return apply_text_watermark(
-            image, self._watermark_settings, (x, y, width, height)
+            image, self._watermark_settings, subject_box
         )
 
     def closeEvent(self, event: QCloseEvent) -> None:

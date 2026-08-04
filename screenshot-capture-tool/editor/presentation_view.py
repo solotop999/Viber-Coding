@@ -8,6 +8,7 @@ from PyQt6.QtWidgets import QLabel, QWidget
 
 from core.paths import asset_path
 from editor.canvas import AnnotationCanvas, _pil_to_qpixmap
+from processing.watermark import apply_background_watermark
 from processing.presentation import (
     PresentationGeometry,
     PresentationSettings,
@@ -259,6 +260,9 @@ class PresentationView(QWidget):
     def set_watermark_settings(self, settings: dict) -> None:
         self._watermark_settings = dict(settings)
         self._refresh_watermark()
+        if self._settings.enabled:
+            self._refresh_background_now()
+            self.update()
 
     def refresh_for_image(self) -> None:
         self._refresh_view(defer_background=True)
@@ -383,14 +387,20 @@ class PresentationView(QWidget):
         )
         if preview_size != self._geometry.canvas_size:
             bg = bg.resize(self._geometry.canvas_size, Image.Resampling.LANCZOS)
-        glow, core = render_neon_frame(
+        glow, _ = render_neon_frame(
             self._geometry.canvas_size,
             self._geometry.subject_pos,
             self._canvas.image_size(),
         )
         bg = bg.convert("RGBA")
         bg.alpha_composite(glow)
-        bg.alpha_composite(core)
+        x, y = self._geometry.subject_pos
+        width, height = self._canvas.image_size()
+        bg = apply_background_watermark(
+            bg,
+            self._watermark_settings,
+            (x, y, width, height),
+        )
         self._background = _pil_to_qpixmap(bg)
 
     def _preview_render_size(self, canvas_size: tuple[int, int]) -> tuple[int, int]:

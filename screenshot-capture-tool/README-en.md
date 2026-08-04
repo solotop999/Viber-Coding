@@ -12,14 +12,14 @@
 
 ## Change the watermark
 
-The text watermark is enabled by default as `𝕏: @solotop999`. It appears only in the bottom-right corner of the **Background** and never covers the captured image.
+The text watermark is enabled by default as `𝕏: @solotop999`. When enabled, the app adds a small bottom-right mark plus a very faint diagonal pattern embedded in the **Background**. Both are masked away from the screenshot and never cover captured content.
 
 1. After capturing an image, keep **Background** enabled.
 2. Click **Mark** on the toolbar.
 3. Enable or disable the watermark, change its text, and adjust **Opacity**.
 4. Click **Save** in the dialog. The preference is stored locally for future sessions.
 
-The watermark is included in both **Copy** and **Save** output. It is hidden when **Background** is disabled.
+The small mark and embedded pattern are consistent across preview, **Copy**, and **Save**. Both are hidden when **Background** is disabled.
 
 ---
 
@@ -40,6 +40,13 @@ After each capture, assets/icon.png is added automatically in the bottom-left co
 This is the standout feature.
 
 After you capture a screenshot, the image is automatically given **soft rounded corners**. Turn on **Background** and the app adds a clean layer behind the screenshot, turning a plain capture into a polished visual that is ready to share.
+
+**Blue–violet neon frame:**
+
+- Color travels around the perimeter: blue/cyan on the left and violet/magenta on the right.
+- A bright 2 px white core is surrounded by colored shoulders and compact outer/inner glow.
+- The image and frame share one corner radius; masks render at 4× and downsample for smooth curves.
+- Preview, Copy, and Save use the same renderer, keeping the displayed and exported results consistent.
 
 **Social-friendly layout presets:**
 | Layout | Ratio | Best for |
@@ -72,9 +79,9 @@ Output: `dist/capture.exe`
 
 - **[⬇️ Download Solotop Capture for Windows](https://github.com/solotop999/Viber-Coding/raw/refs/heads/main/screenshot-capture-tool/Solotop%20Capture.exe)**
 - Ready-to-use file: `Solotop Capture.exe` — download and run, no installation required
-- Size: `39,612,200 bytes` (~37.8 MiB)
-- MD5: `72AF5FB1D40B6A5B7DB11B92FF8ED50E`
-- SHA-256: `E9E1B1B0049837764CEBD8C3DFEDAEC683772E5A734D8737E7A9AB1DF796FC26`
+- Size: `39,616,777 bytes` (~37.8 MiB)
+- MD5: `E7B595D04E39EADC2D5221816ACF6739`
+- SHA-256: `65665B8C384BC19F4442D84A3E109EA5DB31391669AA766571AF48DACD156087`
 
 ## Supported platforms
 
@@ -129,7 +136,8 @@ Run it from source or build it into a `.exe`, whichever you prefer.
 - **Copy** (`Ctrl+C`) / **Save** (`Ctrl+S`) / **New** (`Ctrl+N`)
 - “Copied” toast to confirm clipboard success
 - Remembers background color and style for the next app launch
-- Custom text watermark stored locally and restricted to the background area
+- Layered blue–violet neon frame with a bright white core, compact inner/outer glow, and 4× anti-aliased corners
+- Custom text watermark with a small footer mark and faint embedded pattern, stored locally and restricted to the background
 
 ---
 

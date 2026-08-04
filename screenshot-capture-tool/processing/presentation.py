@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageOps
+from PIL import Image, ImageChops, ImageDraw, ImageEnhance, ImageFilter, ImageOps
 
 from core.paths import asset_path
 from core.settings import is_local_background_image_path
@@ -183,7 +183,6 @@ def render_neon_frame(
     subject_size: tuple[int, int],
 ) -> tuple[Image.Image, Image.Image]:
     """Return separate glow and crisp border layers for a screenshot."""
-    canvas_width, canvas_height = canvas_size
     x, y = subject_pos
     width, height = subject_size
     empty = Image.new("RGBA", canvas_size, (0, 0, 0, 0))
@@ -194,33 +193,21 @@ def render_neon_frame(
     radius = rounded_corner_radius(subject_size)
     box = (x, y, x + width - 1, y + height - 1)
 
-    ring_mask = Image.new("L", canvas_size, 0)
-    ImageDraw.Draw(ring_mask).rounded_rectangle(
-        box,
-        radius=radius,
-        outline=255,
-        width=stroke,
+    ring_mask = _render_rounded_mask(
+        canvas_size,
+        subject_pos,
+        subject_size,
+        radius,
+        outline_width=stroke,
     )
 
-    gradient = Image.new("RGBA", (canvas_width, 1))
-    pixels = gradient.load()
-    left = (76, 190, 255)
-    middle = (112, 111, 255)
-    right = (218, 72, 255)
-    midpoint = max(1, canvas_width // 2)
-    for px in range(canvas_width):
-        if px <= midpoint:
-            color = _blend_rgb(left, middle, px / midpoint)
-        else:
-            color = _blend_rgb(middle, right, (px - midpoint) / max(1, canvas_width - 1 - midpoint))
-        pixels[px, 0] = (*color, 255)
-    gradient = gradient.resize(canvas_size)
+    gradient = _render_neon_gradient(canvas_size)
 
     # Build the bloom from wider source bands. Blurring the thin core directly
     # makes the halo disappear on detailed backgrounds.
     scale = min(width, height)
-    tight_width = max(5, round(scale * 0.012))
-    broad_width = max(11, round(scale * 0.026))
+    tight_width = max(3, round(scale * 0.005))
+    broad_width = max(6, round(scale * 0.010))
     tight_source = Image.new("L", canvas_size, 0)
     broad_source = Image.new("L", canvas_size, 0)
     ImageDraw.Draw(tight_source).rounded_rectangle(
@@ -236,8 +223,8 @@ def render_neon_frame(
         width=broad_width,
     )
 
-    broad_blur = min(22, max(10, round(scale * 0.030)))
-    tight_blur = min(10, max(4, round(scale * 0.012)))
+    broad_blur = min(9, max(5, round(scale * 0.010)))
+    tight_blur = min(4, max(2, round(scale * 0.004)))
     broad_mask = broad_source.filter(ImageFilter.GaussianBlur(broad_blur))
     tight_mask = tight_source.filter(ImageFilter.GaussianBlur(tight_blur))
 
@@ -247,12 +234,109 @@ def render_neon_frame(
     tight_glow.putalpha(tight_mask.point(lambda value: min(255, round(value * 1.18))))
     glow = Image.alpha_composite(broad_glow, tight_glow)
 
-    core = gradient.copy()
-    core.putalpha(ring_mask)
-    highlight = Image.new("RGBA", canvas_size, (245, 251, 255, 0))
-    highlight.putalpha(ring_mask.point(lambda value: round(value * 0.68)))
+    # Keep a restrained part of the bloom inside the rounded screenshot. This
+    # is composited after the subject, while the outer glow stays behind it.
+    subject_mask = _render_rounded_mask(
+        canvas_size,
+        subject_pos,
+        subject_size,
+        radius,
+        filled=True,
+    )
+    inner_broad = broad_mask.point(lambda value: min(255, round(value * 0.48)))
+    inner_tight = tight_mask.point(lambda value: min(255, round(value * 0.82)))
+    inner_mask = ImageChops.multiply(ImageChops.lighter(inner_broad, inner_tight), subject_mask)
+    inner_glow = gradient.copy()
+    inner_glow.putalpha(inner_mask)
+
+    colored_core = gradient.copy()
+    colored_core.putalpha(ring_mask)
+    core = Image.alpha_composite(inner_glow, colored_core)
+
+    # The white-hot center is intentionally much thinner than the colored
+    # shoulders. A full-width white mask makes the tube look like a flat line.
+    hot_mask = _render_rounded_mask(
+        canvas_size,
+        subject_pos,
+        subject_size,
+        radius,
+        outline_width=max(2, stroke // 2),
+        opacity=225,
+    )
+    highlight = Image.new("RGBA", canvas_size, (249, 252, 255, 0))
+    highlight.putalpha(hot_mask)
     core = Image.alpha_composite(core, highlight)
     return glow, core
+
+
+def _render_rounded_mask(
+    canvas_size: tuple[int, int],
+    subject_pos: tuple[int, int],
+    subject_size: tuple[int, int],
+    radius: int,
+    *,
+    outline_width: int = 0,
+    opacity: int = 255,
+    filled: bool = False,
+) -> Image.Image:
+    """Render an anti-aliased rounded mask at 4x, limited to the subject."""
+    width, height = subject_size
+    scale = 4
+    large_size = (max(1, width * scale), max(1, height * scale))
+    large = Image.new("L", large_size, 0)
+    draw = ImageDraw.Draw(large)
+    kwargs = {"radius": radius * scale}
+    if filled:
+        kwargs["fill"] = opacity
+    else:
+        kwargs["outline"] = opacity
+        kwargs["width"] = max(1, outline_width * scale)
+    draw.rounded_rectangle(
+        (0, 0, large_size[0] - 1, large_size[1] - 1),
+        **kwargs,
+    )
+    local = large.resize(subject_size, Image.Resampling.LANCZOS)
+    mask = Image.new("L", canvas_size, 0)
+    mask.paste(local, subject_pos)
+    return mask
+
+
+def _render_neon_gradient(canvas_size: tuple[int, int]) -> Image.Image:
+    """Render a compact angular color map, then scale it to the output."""
+    width, height = canvas_size
+    longest = max(width, height)
+    sample_width = max(2, round(width * min(1.0, 256 / longest)))
+    sample_height = max(2, round(height * min(1.0, 256 / longest)))
+    gradient = Image.new("RGBA", (sample_width, sample_height))
+    pixels = gradient.load()
+    stops = (
+        (0.00, (82, 151, 255)),
+        (0.13, (145, 72, 255)),
+        (0.25, (229, 74, 255)),
+        (0.43, (219, 67, 255)),
+        (0.56, (121, 91, 255)),
+        (0.68, (54, 190, 255)),
+        (0.78, (58, 143, 255)),
+        (0.89, (146, 68, 255)),
+        (1.00, (82, 151, 255)),
+    )
+    center_x = (sample_width - 1) / 2
+    center_y = (sample_height - 1) / 2
+    norm_x = max(1.0, sample_width / 2)
+    norm_y = max(1.0, sample_height / 2)
+    for py in range(sample_height):
+        dy = (py - center_y) / norm_y
+        for px in range(sample_width):
+            dx = (px - center_x) / norm_x
+            position = (math.atan2(dx, -dy) / (2 * math.pi)) % 1.0
+            for index in range(1, len(stops)):
+                end_stop, end_color = stops[index]
+                if position <= end_stop:
+                    start_stop, start_color = stops[index - 1]
+                    mix = (position - start_stop) / max(0.0001, end_stop - start_stop)
+                    pixels[px, py] = (*_blend_rgb(start_color, end_color, mix), 255)
+                    break
+    return gradient.resize(canvas_size, Image.Resampling.BICUBIC)
 
 
 def _flatten_source(img: Image.Image) -> Image.Image:

@@ -12,14 +12,14 @@
 
 ## Đổi watermark
 
-Watermark chữ được bật sẵn với nội dung `𝕏: @solotop999`. Watermark chỉ xuất hiện ở góc phải phía dưới của **Background**, không đè lên nội dung ảnh chụp.
+Watermark chữ được bật sẵn với nội dung `𝕏: @solotop999`. Khi bật, ứng dụng tạo một watermark nhỏ ở góc phải phía dưới và một pattern chéo rất mờ chìm trong **Background**. Cả hai đều được mask khỏi screenshot nên không đè lên nội dung ảnh chụp.
 
 1. Sau khi chụp ảnh, giữ **Background** ở trạng thái bật.
 2. Bấm **Mark** trên thanh công cụ.
 3. Bật hoặc tắt watermark, nhập nội dung mới và chỉnh **Opacity**.
 4. Bấm **Save** trong hộp thoại. Thiết lập được lưu cục bộ cho lần mở sau.
 
-Watermark được áp dụng cho cả **Copy** và **Save**. Khi tắt **Background**, watermark sẽ không xuất hiện.
+Watermark nhỏ và pattern chìm đều xuất hiện nhất quán trong preview, **Copy** và **Save**. Khi tắt **Background**, cả hai sẽ không xuất hiện.
 
 ---
 
@@ -40,6 +40,13 @@ Sau khi chụp, assets/icon.png được thêm tự động ở góc dưới bê
 Đây là tính năng hay nhất.
 
 Khi bạn chụp xong, ảnh screenshot tự động được **bo góc mềm mại**. Bật **Background** lên là có ngay một lớp nền phía sau ảnh chụp — biến một screenshot thường thành một hình ảnh có bố cục đẹp, sẵn sàng đăng bài.
+
+**Viền neon xanh–tím:**
+
+- Màu chạy quanh chu vi: xanh/cyan ở cạnh trái, tím/magenta ở cạnh phải.
+- Lõi trắng sáng 2 px, có vai màu và glow gọn ở cả phía ngoài lẫn phía trong screenshot.
+- Góc bo của ảnh và viền dùng chung bán kính; mask được render ở 4× rồi downsample để đường cong mượt.
+- Preview, Copy và Save dùng chung renderer nên kết quả hiển thị và ảnh xuất khớp nhau.
 
 
 **Layouts chuẩn tỉ lệ mạng xã hội:**
@@ -73,9 +80,9 @@ Output: `dist/capture.exe`
 
 - **[⬇️ Tải Solotop Capture cho Windows](https://github.com/solotop999/Viber-Coding/raw/refs/heads/main/screenshot-capture-tool/Solotop%20Capture.exe)**
 - File dùng ngay: `Solotop Capture.exe` — tải về và mở, không cần cài đặt
-- Kích thước: `39,612,200 bytes` (~37.8 MiB)
-- MD5: `72AF5FB1D40B6A5B7DB11B92FF8ED50E`
-- SHA-256: `E9E1B1B0049837764CEBD8C3DFEDAEC683772E5A734D8737E7A9AB1DF796FC26`
+- Kích thước: `39,616,777 bytes` (~37.8 MiB)
+- MD5: `E7B595D04E39EADC2D5221816ACF6739`
+- SHA-256: `65665B8C384BC19F4442D84A3E109EA5DB31391669AA766571AF48DACD156087`
 
 ## Hỗ trợ
 
@@ -130,7 +137,8 @@ Chạy từ source hoặc build thành `.exe` — tùy bạn.
 - **Copy** (`Ctrl+C`) / **Save** (`Ctrl+S`) / **New** (`Ctrl+N`)
 - Toast "Copied" xác nhận copy thành công
 - Lưu lại màu nền và style cho lần mở sau
-- Watermark chữ tùy chỉnh, lưu cục bộ và chỉ nằm trên phần background
+- Viền neon xanh–tím nhiều lớp, lõi trắng sáng, inner/outer glow và góc bo anti-alias 4×
+- Watermark chữ tùy chỉnh gồm bản nhỏ ở mép dưới và pattern chìm, lưu cục bộ và chỉ nằm trên background
 
 ---
 
